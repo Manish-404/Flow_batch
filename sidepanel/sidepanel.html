@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FlowBatch</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <!-- ============================ MAIN VIEW ============================ -->
+    <main id="view-main" class="view">
+      <div class="topbar">
+        <input id="projectName" class="input input-lg" placeholder="Project name (used as download folder)" spellcheck="false" />
+        <button id="btnSettings" class="icon-btn" title="Settings" aria-label="Settings">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path fill="none" stroke="currentColor" stroke-width="1.8" d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path fill="none" stroke="currentColor" stroke-width="1.8" d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+        </button>
+      </div>
+      <div class="conn-row">
+        <span id="connPill" class="pill"><span class="dot"></span><span id="connText">Checking Flow tab…</span></span>
+        <button id="btnOpenFlow" class="link-btn">Open Flow</button>
+      </div>
+
+      <!-- Upload assets -->
+      <section class="card">
+        <div class="card-head">
+          <h2>Upload assets</h2>
+          <span id="assetCount" class="muted small">0 images</span>
+        </div>
+        <p class="muted">Optional — name each image to <b>@mention</b> it in a prompt.</p>
+        <div id="dropzone" class="dropzone" tabindex="0">
+          <span class="plus-circle">+</span>
+          <span id="dropText">Drop images here, or click to browse</span>
+        </div>
+        <input id="fileInput" type="file" accept="image/*" multiple hidden />
+        <input id="folderInput" type="file" webkitdirectory multiple hidden />
+        <button id="btnFolder" class="btn btn-ghost btn-sm">Choose folder instead</button>
+        <div id="assetGrid" class="asset-grid"></div>
+        <div class="row" id="assetActions" hidden>
+          <button id="btnZipAssets" class="btn btn-ghost btn-sm grow">⤓ Download as ZIP…</button>
+          <button id="btnClearAssets" class="btn btn-ghost btn-sm grow">Clear assets</button>
+        </div>
+      </section>
+
+      <!-- Frame extractor -->
+      <details id="framesCard" class="card collapsible">
+        <summary class="card-head">
+          <h2>Frame extractor</h2>
+          <span class="muted small">video → images every N sec</span>
+        </summary>
+        <div class="seg seg-sm" role="tablist">
+          <button class="seg-btn active" data-frame-source="video">Video file</button>
+          <button class="seg-btn" data-frame-source="tab">Screenshot tab</button>
+        </div>
+        <div id="frameVideoBox" class="stack">
+          <button id="btnChooseVideo" class="btn btn-ghost btn-block">Choose video…</button>
+          <input id="videoInput" type="file" accept="video/*" hidden />
+          <video id="videoPreview" class="video-preview" controls muted playsinline preload="metadata" hidden></video>
+          <div id="videoMeta" class="muted small"></div>
+        </div>
+        <div class="grid-3">
+          <label class="field"><span>Interval (sec)</span><input id="frameInterval" class="input" type="number" min="0.04" step="0.1" value="1" /></label>
+          <label class="field" data-video-only><span>Start (sec)</span><input id="frameStart" class="input" type="number" min="0" step="0.1" value="0" /></label>
+          <label class="field" data-video-only><span>End (sec)</span><input id="frameEnd" class="input" type="number" min="0" step="0.1" placeholder="end" /></label>
+          <label class="field" data-tab-only hidden><span>Count</span><input id="frameCount" class="input" type="number" min="1" step="1" value="10" /></label>
+          <label class="field"><span>Name prefix</span><input id="framePrefix" class="input" value="f_" spellcheck="false" /></label>
+          <label class="field"><span>Start #</span><input id="frameStartNum" class="input" type="number" min="0" step="1" value="1" /></label>
+          <label class="field"><span>Format</span>
+            <select id="frameFormat" class="input"><option value="png">PNG</option><option value="jpg">JPG</option></select>
+          </label>
+        </div>
+        <div class="checks">
+          <label class="check"><input id="frameToAssets" type="checkbox" checked /> Add frames to assets</label>
+          <label class="check"><input id="frameToDownloads" type="checkbox" /> Save frames to Downloads</label>
+        </div>
+        <div id="frameEstimate" class="muted small"></div>
+        <div class="row">
+          <button id="btnExtract" class="btn btn-primary grow">Extract frames</button>
+          <button id="btnCancelExtract" class="btn btn-ghost" hidden>Cancel</button>
+        </div>
+        <div id="frameProgressWrap" class="bar" hidden><div id="frameProgress" class="bar-fill"></div></div>
+        <div class="row between" id="frameResultRow" hidden>
+          <span id="frameResultCount" class="muted small"></span>
+          <div class="row">
+            <button id="btnZipFrames" class="btn btn-ghost btn-sm">⤓ ZIP…</button>
+            <button id="btnClearFrames" class="btn btn-ghost btn-sm">Clear frames</button>
+          </div>
+        </div>
+        <div id="framePreview" class="frame-strip"></div>
+      </details>
+
+      <!-- Prompt input -->
+      <section class="card">
+        <div class="card-head"><h2>Prompt input</h2><span id="promptStats" class="muted small">0 prompts</span></div>
+        <p class="muted">Separate multiple prompts with <code id="sepHint" class="kbd-accent">###</code> on its own line.</p>
+        <p class="muted">Shortcut: <kbd>Ctrl</kbd> + <kbd>↵</kbd> inserts a separator</p>
+        <div id="mentionChips" class="chips"></div>
+        <div class="prompt-wrap" id="promptWrap">
+          <button id="btnInsertSep" class="plus-mini" title="Insert separator">+</button>
+          <div id="promptBackdrop" class="prompt-layer" aria-hidden="true"></div>
+          <textarea id="promptInput" class="prompt-layer prompt-text" spellcheck="false"
+            placeholder="Enter your prompt here&#10;Hint: Ctrl + ↵ adds a separator. Type @ to mention an asset.&#10;Use {asset} in one prompt, then “One prompt per asset”."></textarea>
+          <div id="mentionPopup" class="mention-popup" hidden></div>
+        </div>
+        <div class="row between">
+          <div class="row">
+            <button id="btnPerAsset" class="btn btn-ghost btn-sm" title="Use the first prompt as a template and create one prompt per asset">⚡ One prompt per asset</button>
+            <button id="btnPerPair" class="btn btn-ghost btn-sm" data-video-mode hidden title="Use the first prompt as a template and create one prompt per start → end pair">🎬 One prompt per frame pair</button>
+          </div>
+          <span id="promptWarn" class="warn small"></span>
+        </div>
+
+        <div class="sub-card">
+          <div class="seg">
+            <button class="seg-btn active" data-mode="image">
+              <svg viewBox="0 0 24 24" width="18" height="18"><rect x="3" y="3" width="18" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="9" cy="9" r="1.8" fill="currentColor"/><path d="m21 15-5-5L5 21" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+              Image
+            </button>
+            <button class="seg-btn" data-mode="video">
+              <svg viewBox="0 0 24 24" width="18" height="18"><rect x="2" y="5" width="14" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m16 10 6-3v10l-6-3z" fill="currentColor"/></svg>
+              Video
+            </button>
+          </div>
+          <div class="grid-2">
+            <div class="field"><span class="label">Aspect ratio</span><div id="aspectSelect" class="cselect"></div></div>
+            <div class="field"><span class="label">Model</span><div id="modelSelect" class="cselect"></div></div>
+          </div>
+          <div class="seg count-seg" id="countSeg">
+            <button class="seg-btn active" data-count="1">x1</button>
+            <button class="seg-btn" data-count="2">x2</button>
+            <button class="seg-btn" data-count="3">x3</button>
+            <button class="seg-btn" data-count="4">x4</button>
+          </div>
+          <div class="checks" data-video-mode hidden>
+            <label class="check"><input id="seqFrames" type="checkbox" /> Sequential frames — pair images as start → end</label>
+          </div>
+          <p class="muted small" data-video-mode hidden>
+            Each scene uses two images: 1→2, 3→4, 5→6… With an odd number of images the last one
+            can't be paired, so that single scene is generated with <b>Ingredients to video</b> instead.
+          </p>
+        </div>
+      </section>
+
+      <!-- Work queue -->
+      <section class="card">
+        <div class="card-head">
+          <h2>Work queue</h2>
+          <span id="queueCount" class="badge">0</span>
+        </div>
+        <div id="queueList" class="queue"><div class="empty muted">Prompts appear here when you press Start.</div></div>
+      </section>
+
+      <!-- Controls -->
+      <section class="card controls">
+        <button id="btnStart" class="btn btn-primary btn-xl btn-block">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path d="M7 5v14l12-7z" fill="currentColor"/></svg>
+          <span id="btnStartText">Start</span>
+        </button>
+        <div class="row">
+          <button id="btnPause" class="btn btn-dark grow" disabled>❚❚ Pause</button>
+          <button id="btnStop" class="btn btn-dark grow" disabled>■ Stop</button>
+          <button id="btnNewProject" class="btn btn-outline grow">New project</button>
+        </div>
+      </section>
+
+      <!-- Progress -->
+      <section class="card">
+        <h2>Progress</h2>
+        <div class="bar"><div id="progressBar" class="bar-fill"></div></div>
+        <div class="row between">
+          <b id="progressText">0 / 0</b>
+          <span id="progressMeta" class="muted small"></span>
+        </div>
+        <div id="currentStep" class="muted small"></div>
+      </section>
+
+      <!-- Summary -->
+      <section id="summaryCard" class="card summary" hidden>
+        <div id="summaryIcon" class="summary-icon">✓</div>
+        <h3 id="summaryTitle">Completed</h3>
+        <div id="summaryCounts" class="small"></div>
+        <div id="summaryDownloads" class="muted small"></div>
+        <button id="btnRegenerate" class="btn btn-danger btn-block" hidden>Regenerate failed images</button>
+        <button id="btnZipResults" class="btn btn-ghost btn-block">⤓ Download results as ZIP…</button>
+        <button id="btnResultsToAssets" class="btn btn-ghost btn-block" hidden>🎬 Use these images for video</button>
+        <button id="btnOpenFolder" class="btn btn-ghost btn-block">Show downloads</button>
+        <button id="btnSummaryNew" class="btn btn-outline btn-block">New project</button>
+      </section>
+
+      <!-- Log -->
+      <details class="card collapsible" id="logCard">
+        <summary class="card-head"><h2>Activity log</h2><span id="logCount" class="muted small"></span></summary>
+        <div class="row">
+          <button id="btnCopyLog" class="btn btn-ghost btn-sm">Copy</button>
+          <button id="btnClearLog" class="btn btn-ghost btn-sm">Clear</button>
+        </div>
+        <ol id="logList" class="log"></ol>
+      </details>
+
+      <footer class="foot">FlowBatch</footer>
+    </main>
+
+    <!-- ============================ SETTINGS VIEW ============================ -->
+    <main id="view-settings" class="view" hidden>
+      <div class="topbar">
+        <button id="btnBack" class="btn btn-pill">← Back</button>
+        <h1 class="grow">Settings</h1>
+        <div class="theme-toggle">
+          <button data-theme-set="light" title="Light">☀</button>
+          <button data-theme-set="dark" title="Dark">☾</button>
+        </div>
+      </div>
+
+      <section class="card">
+        <div class="card-head"><h2 class="dot-title">Basic</h2><span class="muted small">Storage and defaults</span></div>
+        <label class="field"><span class="label">Base folder name (inside Downloads)</span><input id="setBaseFolder" class="input input-lg" spellcheck="false" /></label>
+        <label class="field"><span class="label">Prompt separator</span><input id="setSeparator" class="input input-lg" spellcheck="false" /></label>
+        <p class="muted small">Used by the + button and prompt splitting. The @ character is reserved for mentions.</p>
+        <label class="field"><span class="label">Flow URL</span><input id="setFlowUrl" class="input" spellcheck="false" /></label>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2 class="dot-title">Automation</h2><span class="muted small">Pacing and behaviour</span></div>
+        <div class="grid-2">
+          <div class="field"><span class="label">Delay between prompts (sec)</span><div class="stepper" data-key="delaySec" data-min="0" data-max="600" data-step="1"></div></div>
+          <div class="field"><span class="label">Generation timeout (sec)</span><div class="stepper" data-key="timeoutSec" data-min="30" data-max="1800" data-step="30"></div></div>
+          <div class="field"><span class="label">Retries per prompt</span><div class="stepper" data-key="retries" data-min="0" data-max="5" data-step="1"></div></div>
+          <div class="field"><span class="label">Poll every (sec)</span><div class="stepper" data-key="pollSec" data-min="1" data-max="10" data-step="1"></div></div>
+        </div>
+        <div class="toggles">
+          <label class="toggle"><input type="checkbox" data-setting="autoDownload" /><span></span>Auto-download each result</label>
+          <label class="toggle"><input type="checkbox" data-setting="applyFlowSettings" /><span></span>Apply mode / ratio / model / count in Flow before running</label>
+          <label class="toggle"><input type="checkbox" data-setting="clearReferences" /><span></span>Remove previous reference images before each prompt</label>
+          <label class="toggle"><input type="checkbox" data-setting="autoNewProject" /><span></span>Create a Flow project automatically if none is open</label>
+          <label class="toggle"><input type="checkbox" data-setting="stopOnFailure" /><span></span>Stop the queue after 3 failures in a row</label>
+        </div>
+        <label class="field"><span class="label">@mention text sent to Flow</span>
+          <select id="setMentionMode" class="input">
+            <option value="remove">Remove it (“this @f_006 image” → “this image”)</option>
+            <option value="keep">Keep the name (“this f_006 image”)</option>
+            <option value="label">Replace with “reference image 1”</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2 class="dot-title">Flow elements</h2><span class="muted small">Advanced · fix detection</span></div>
+        <p class="muted small">FlowBatch finds these automatically. If Flow’s layout changes and a step fails, open a Flow project, press <b>Pick</b> and click the element on the page.</p>
+        <div id="selectorRows" class="selector-rows"></div>
+        <button id="btnDiagnose" class="btn btn-ghost btn-block">Diagnose current Flow tab</button>
+        <pre id="diagOutput" class="diag" hidden></pre>
+      </section>
+
+      <div class="settings-foot">
+        <span class="saved"><span class="dot ok"></span><span id="autosaveState">Autosaved</span></span>
+        <button id="btnReset" class="btn btn-outline">Reset defaults</button>
+      </div>
+      <footer class="foot">FlowBatch</footer>
+    </main>
+
+    <!-- ============================ ZIP PICKER ============================ -->
+    <div id="zipModal" class="modal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="zipTitle">
+        <div class="card-head">
+          <h2 id="zipTitle">Download as ZIP</h2>
+          <button id="zipClose" class="icon-x" title="Close" aria-label="Close">✕</button>
+        </div>
+        <p id="zipNote" class="muted small" hidden></p>
+        <div class="row between">
+          <div class="row">
+            <button id="zipAll" class="btn btn-ghost btn-sm">All</button>
+            <button id="zipNone" class="btn btn-ghost btn-sm">None</button>
+            <button id="zipInvert" class="btn btn-ghost btn-sm">Invert</button>
+          </div>
+          <span id="zipCount" class="muted small"></span>
+        </div>
+        <div id="zipGrid" class="zip-grid"></div>
+        <label class="field"><span>ZIP file name</span><input id="zipName" class="input" spellcheck="false" /></label>
+        <div id="zipProgressWrap" class="bar" hidden><div id="zipProgress" class="bar-fill"></div></div>
+        <div id="zipStatus" class="muted small"></div>
+        <div class="row">
+          <button id="zipGo" class="btn btn-primary grow">Download ZIP…</button>
+          <button id="zipCancel" class="btn btn-ghost">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" hidden></div>
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>

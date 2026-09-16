@@ -1,0 +1,471 @@
+// Side panel entry: loads state, wires the queue / controls / progress / summary / log.
+import { app, on, persistSession } from './app.js';
+import { loadSettings, loadSession, listAssets } from './store.js';
+import { initAssets, addAssets, removeAllAssets } from './assets-ui.js';
+import { initPrompt, setMode } from './prompt-ui.js';
+import { initFrames } from './frames-ui.js';
+import { initSettings, applyTheme } from './settings-ui.js';
+import { initZip, openZipPicker } from './zip-ui.js';
+import { Runner } from './runner.js';
+import { findFlowTab, callAgent } from './flow.js';
+import { $, el, pad, slug, sanitizeSegment, splitPrompts, findMentions, fmtDuration, log, onLog, logLines, toast } from './utils.js';
+
+let renderQueued = false;
+let lastStep = '';
+
+// ---------------- queue ----------------
+function buildQueue() {
+  const prompts = splitPrompts(app.session.promptText, app.settings.separator);
+  const byName = new Map(app.assets.map((a) => [a.name.toLowerCase(), a.name]));
+  const seq = app.session.mode === 'video' && app.session.seqFrames;
+  return prompts.map((prompt, i) => {
+    const mentioned = findMentions(prompt);
+    const mentions = [...new Set(mentioned.map((m) => byName.get(m.toLowerCase())).filter(Boolean))];
+    return {
+      id: crypto.randomUUID(),
+      n: i + 1,
+      prompt,
+      mentions,
+      unknown: [...new Set(mentioned.filter((m) => !byName.has(m.toLowerCase())))],
+      // Two images = a start → end pair; a lone image cannot be a pair, so it runs as ingredients.
+      videoMode: seq ? (mentions.length >= 2 ? 'frames' : 'ingredients') : null,
+      status: 'pending',
+      results: [],
+      error: '',
+      attempts: 0,
+    };
+  });
+}
+
+/** Required heads-up: odd image counts leave one scene that can't use start/end frames. */
+function confirmSequentialPlan() {
+  if (!(app.session.mode === 'video' && app.session.seqFrames)) return true;
+  const q = app.session.queue;
+  const framePairs = q.filter((i) => i.videoMode === 'frames').length;
+  const single = q.filter((i) => i.videoMode === 'ingredients');
+  if (!framePairs && !single.length) return true;
+  const lines = [
+    `Sequential frames is on for ${q.length} scene(s):`,
+    ``,
+    `• ${framePairs} scene(s) use Frames to video — first @mention is the start frame, second is the end frame.`,
+  ];
+  if (single.length) {
+    lines.push(
+      ``,
+      `• ${single.length} scene(s) have only one image, so they cannot use start/end frames.`,
+      `  FlowBatch will switch Flow to Ingredients to video for those: ${single
+        .slice(0, 6)
+        .map((i) => `#${pad(i.n, 2)} @${i.mentions[0] || '(none)'}`)
+        .join(', ')}${single.length > 6 ? `, +${single.length - 6} more` : ''}.`
+    );
+  }
+  lines.push(``, `Start generating?`);
+  return confirm(lines.join('\n'));
+}
+
+function statusIcon(status) {
+  return el('span', { class: `st ${status}`, text: status === 'success' ? '✓' : status === 'failed' ? '✕' : status === 'pending' ? '•' : '' });
+}
+
+function queueRow(item) {
+  const runner = app.runner;
+  const idle = runner.state !== 'running';
+  const actions = el('div', { class: 'q-actions' });
+  if (item.status === 'failed' && idle) {
+    actions.append(
+      el('button', {
+        title: 'Retry this prompt',
+        text: '↻',
+        onclick: () => {
+          item.status = 'pending';
+          item.error = '';
+          scheduleRender();
+          startRun(true);
+        },
+      })
+    );
+  }
+  if (item.status === 'success' && item.results.length) {
+    actions.append(
+      el('button', {
+        title: 'Download again',
+        text: '⤓',
+        onclick: async () => {
+          await runner.downloadItem(item);
+          toast('Download started');
+        },
+      })
+    );
+  }
+  actions.append(statusIcon(item.status));
+
+  const mode =
+    app.session.mode !== 'video' ? 'IMG' : item.videoMode === 'frames' ? 'FRM' : item.videoMode === 'ingredients' ? 'ING' : 'VID';
+  const row = el(
+    'div',
+    { class: `q-row ${item.status}`, title: item.prompt.slice(0, 600) },
+    el('span', { class: 'q-idx', text: pad(item.n, 2) }),
+    el('span', { class: 'q-tag', text: mode }),
+    el('span', { class: 'q-text', text: item.prompt.replace(/\s+/g, ' ') }),
+    actions
+  );
+  if (item.unknown?.length) row.append(el('div', { class: 'q-err', text: `Unknown mention: @${item.unknown.join(', @')} (sent as plain text)` }));
+  if (item.error && item.status !== 'success') row.append(el('div', { class: 'q-err', text: `${item.error}${item.attempts > 1 ? ` · ${item.attempts} attempts` : ''}` }));
+  if (item.results?.length) {
+    const thumbs = el('div', { class: 'q-results' });
+    for (const r of item.results) {
+      if (r.kind !== 'image' || r.url.startsWith('blob:')) continue;
+      const img = el('img', { src: r.url, alt: '', loading: 'lazy', title: r.filename ? `${r.filename} · ${r.download || ''}` : '' });
+      img.onerror = () => img.remove();
+      thumbs.append(img);
+    }
+    if (thumbs.childElementCount) row.append(thumbs);
+  }
+  return row;
+}
+
+function renderQueue() {
+  const q = app.session.queue;
+  $('queueCount').textContent = q.length;
+  const list = $('queueList');
+  if (!q.length) {
+    list.replaceChildren(el('div', { class: 'empty muted', text: 'Prompts appear here when you press Start.' }));
+    return;
+  }
+  const scroll = list.scrollTop;
+  list.replaceChildren(...q.map(queueRow));
+  list.scrollTop = scroll;
+  const running = list.querySelector('.q-row.running');
+  if (running && app.runner.state === 'running') running.scrollIntoView({ block: 'nearest' });
+}
+
+// ---------------- progress / summary ----------------
+function counts() {
+  const q = app.session.queue;
+  const success = q.filter((i) => i.status === 'success').length;
+  const failed = q.filter((i) => i.status === 'failed').length;
+  const files = q.flatMap((i) => i.results || []).filter((r) => r.filename);
+  return {
+    total: q.length,
+    success,
+    failed,
+    done: success + failed,
+    pending: q.filter((i) => i.status === 'pending' || i.status === 'running').length,
+    files: files.length,
+    verified: files.filter((r) => r.download === 'complete').length,
+  };
+}
+
+function renderProgress() {
+  const c = counts();
+  const r = app.runner;
+  $('progressBar').style.width = c.total ? `${(c.done / c.total) * 100}%` : '0%';
+  $('progressText').textContent = `${c.success} / ${c.total}${c.failed ? ` (FAILED ${c.failed})` : ''}`;
+  const parts = [];
+  if (r.state !== 'idle' && r.startedAt) parts.push(`elapsed ${fmtDuration(Date.now() - r.startedAt)}`);
+  const eta = r.state === 'running' ? r.eta() : null;
+  if (eta) parts.push(`ETA ${fmtDuration(eta)}`);
+  if (r.state === 'paused') parts.push('paused');
+  $('progressMeta').textContent = parts.join(' · ');
+  $('currentStep').textContent = lastStep;
+}
+
+function renderSummary() {
+  const c = counts();
+  const show = app.runner.state === 'idle' && c.total > 0 && c.pending === 0 && c.done > 0;
+  $('summaryCard').hidden = !show;
+  if (!show) return;
+  const all = c.failed === 0;
+  const none = c.success === 0;
+  $('summaryIcon').textContent = all ? '✅' : none ? '⛔' : '⚠️';
+  $('summaryTitle').textContent = all ? 'Completed' : none ? 'Failed' : 'Partially completed';
+  $('summaryCounts').innerHTML = `<b class="ok">${c.success}</b> SUCCESS / <b class="bad">${c.failed}</b> FAILED`;
+  $('summaryDownloads').textContent = app.settings.autoDownload
+    ? `DOWNLOAD VERIFICATION ${c.verified === c.files ? 'COMPLETE' : 'IN PROGRESS'} ${c.verified}/${c.files}`
+    : 'Auto-download is off';
+  $('btnRegenerate').hidden = c.failed === 0;
+  $('btnRegenerate').textContent = `Regenerate failed ${app.session.mode === 'video' ? 'videos' : 'images'}`;
+  const images = generatedResults().filter((r) => r.kind === 'image').length;
+  $('btnZipResults').hidden = c.success === 0;
+  $('btnResultsToAssets').hidden = images < 2;
+  $('btnResultsToAssets').textContent = `🎬 Use these ${images} images for video`;
+}
+
+function renderControls() {
+  const state = app.runner.state;
+  $('btnStart').disabled = state === 'running';
+  $('btnStartText').textContent = state === 'running' ? 'Running…' : state === 'paused' ? 'Resume' : 'Start';
+  $('btnPause').disabled = state !== 'running' || app.runner.pauseRequested;
+  $('btnStop').disabled = state === 'idle';
+  $('btnNewProject').disabled = state === 'running';
+}
+
+function renderAll() {
+  renderQueued = false;
+  renderQueue();
+  renderProgress();
+  renderSummary();
+  renderControls();
+}
+
+function scheduleRender() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(renderAll);
+}
+
+// ---------------- actions ----------------
+async function startRun(keepQueue = false) {
+  const runner = app.runner;
+  if (runner.state === 'running') return;
+  if (runner.state === 'paused' || keepQueue) {
+    runner.start();
+    return;
+  }
+  const prompts = splitPrompts(app.session.promptText, app.settings.separator);
+  if (!prompts.length) return toast('Enter at least one prompt');
+
+  const q = app.session.queue;
+  const same = q.length === prompts.length && q.every((item, i) => item.prompt === prompts[i]);
+  if (same && q.some((i) => i.status === 'pending')) {
+    log('Continuing the existing queue');
+    // The Sequential frames switch may have been flipped since the queue was built.
+    const seq = app.session.mode === 'video' && app.session.seqFrames;
+    q.forEach((i) => (i.videoMode = seq ? (i.mentions.length >= 2 ? 'frames' : 'ingredients') : null));
+  } else {
+    if (same && q.length && !confirm('Every prompt in the queue has already run. Run them all again?')) return;
+    app.session.queue = buildQueue();
+    log(`Queue built: ${app.session.queue.length} prompt(s)`);
+  }
+  if (!confirmSequentialPlan()) {
+    log('Start cancelled at the sequential-frames confirmation', 'warn');
+    scheduleRender();
+    return;
+  }
+  if (!app.session.projectName.trim()) {
+    const d = new Date();
+    app.session.projectName = `Flow_${d.getFullYear()}${pad(d.getMonth() + 1, 2)}${pad(d.getDate(), 2)}_${pad(d.getHours(), 2)}${pad(d.getMinutes(), 2)}`;
+    $('projectName').value = app.session.projectName;
+  }
+  persistSession();
+  scheduleRender();
+  runner.start();
+}
+
+async function newProject() {
+  if (app.runner.state === 'running') return;
+  const hasWork = app.session.queue.length > 0;
+  if (hasWork && !confirm('Start a new project? The work queue will be cleared (assets and prompts are kept).')) return;
+  if (app.runner.state === 'paused') app.runner.stop();
+  app.session.queue = [];
+  app.session.projectName = '';
+  $('projectName').value = '';
+  lastStep = '';
+  persistSession();
+  scheduleRender();
+  try {
+    lastStep = 'Opening a new Flow project…';
+    scheduleRender();
+    await app.runner.newProject();
+    toast('New Flow project ready');
+  } catch (e) {
+    log(`New project: ${e.message}`, 'warn');
+    toast(e.message, 4000);
+  } finally {
+    lastStep = '';
+    scheduleRender();
+  }
+}
+
+// ---------------- generated results ----------------
+/** Every result of every successful item, with the same base name auto-download uses. */
+function generatedResults() {
+  const out = [];
+  for (const item of app.session.queue) {
+    if (item.status !== 'success') continue;
+    const base = sanitizeSegment(item.mentions.length ? item.mentions.join('_') : slug(item.prompt));
+    (item.results || []).forEach((res, k) => {
+      out.push({
+        id: `${item.id}_${k}`,
+        name: `${pad(item.n)}_${base}${item.results.length > 1 ? `_${k + 1}` : ''}`,
+        kind: res.kind,
+        thumbUrl: res.kind === 'image' && !res.url.startsWith('blob:') ? res.url : null,
+        res,
+      });
+    });
+  }
+  return out;
+}
+
+function zipResults() {
+  const results = generatedResults();
+  if (!results.length) return toast('No generated results yet');
+  return openZipPicker({
+    title: 'Generated results → ZIP',
+    note: 'Untick anything you do not want in the archive. Files are read from the Flow tab, so keep it open.',
+    filename: `${sanitizeSegment(app.session.projectName, 'flowbatch')}_results`,
+    items: results.map((r) => ({ ...r, getBlob: () => app.runner.resultBlob(r.res) })),
+  });
+}
+
+/** Import the generated images back as assets so they can drive a video run. */
+async function resultsToAssets() {
+  const images = generatedResults().filter((r) => r.kind === 'image');
+  if (!images.length) return toast('No generated images yet');
+  if (
+    !confirm(
+      `Replace the current ${app.assets.length} asset(s) with the ${images.length} generated image(s) as pic_001…?\n\n` +
+        'They are downloaded from the Flow tab, which must stay open.'
+    )
+  )
+    return;
+  lastStep = `Importing ${images.length} generated image(s)…`;
+  scheduleRender();
+  const items = [];
+  try {
+    for (let i = 0; i < images.length; i++) {
+      lastStep = `Importing generated image ${i + 1}/${images.length}…`;
+      renderProgress();
+      items.push({ blob: await app.runner.resultBlob(images[i].res), name: `pic_${pad(i + 1)}` });
+    }
+  } catch (e) {
+    log(`Import failed: ${e.message}`, 'error');
+    toast(e.message, 4000);
+    lastStep = '';
+    scheduleRender();
+    return;
+  }
+  await removeAllAssets();
+  await addAssets(items);
+  app.session.mode = 'video';
+  app.session.seqFrames = true;
+  setMode('video');
+  $('seqFrames').checked = true;
+  persistSession();
+  lastStep = '';
+  scheduleRender();
+  log(`Imported ${items.length} generated image(s) as pic_001… and switched to Video · sequential frames`, 'ok');
+  toast(`Imported ${items.length} image(s) — now press “One prompt per frame pair”`);
+  return undefined;
+}
+
+// ---------------- connection pill ----------------
+async function refreshConnection() {
+  const pill = $('connPill');
+  try {
+    const tab = await findFlowTab({ open: false });
+    if (!tab) {
+      pill.className = 'pill bad';
+      $('connText').textContent = 'No Google Flow tab open';
+      $('btnOpenFlow').hidden = false;
+      return;
+    }
+    $('btnOpenFlow').hidden = true;
+    const info = await callAgent(tab.id, 'ping', { selectors: app.settings.selectors }, { timeoutMs: 4000, retries: 1 });
+    if (info.isProject && info.hasPromptBox) {
+      pill.className = 'pill ok';
+      $('connText').textContent = 'Flow project connected';
+    } else {
+      pill.className = 'pill warn';
+      $('connText').textContent = info.isProject ? 'Flow project — prompt box not found' : 'Flow open — no project yet';
+    }
+  } catch {
+    pill.className = 'pill warn';
+    $('connText').textContent = 'Flow tab found — reload it once';
+  }
+}
+
+// ---------------- log ----------------
+function appendLog(entry) {
+  const list = $('logList');
+  const time = entry.t.toLocaleTimeString([], { hour12: false });
+  list.append(el('li', { class: entry.level }, el('time', { text: time }), entry.message));
+  while (list.childElementCount > 800) list.firstChild.remove();
+  list.scrollTop = list.scrollHeight;
+  $('logCount').textContent = `${logLines.length}`;
+  if (entry.level === 'error') $('logCard').open = true;
+}
+
+// ---------------- boot ----------------
+async function boot() {
+  app.settings = await loadSettings();
+  app.session = await loadSession();
+  applyTheme();
+  app.assets = (await listAssets()).map((a) => ({ ...a, thumbUrl: URL.createObjectURL(a.blob) }));
+
+  app.runner = new Runner({
+    getSettings: () => app.settings,
+    getSession: () => app.session,
+    getAssets: () => app.assets,
+    onUpdate: () => {
+      persistSession();
+      scheduleRender();
+    },
+    onState: scheduleRender,
+    onStep: (text) => {
+      lastStep = text;
+      renderProgress();
+    },
+    onFinished: () => {
+      const c = counts();
+      if (c.done) log(`Finished: ${c.success} success, ${c.failed} failed`, c.failed ? 'warn' : 'ok');
+      scheduleRender();
+    },
+  });
+
+  onLog(appendLog);
+  initSettings();
+  initZip();
+  initAssets();
+  initPrompt();
+  initFrames();
+
+  $('projectName').value = app.session.projectName;
+  $('projectName').addEventListener('input', (e) => {
+    app.session.projectName = e.target.value;
+    persistSession();
+  });
+  $('btnStart').addEventListener('click', () => startRun(false));
+  $('btnPause').addEventListener('click', () => app.runner.pause());
+  $('btnStop').addEventListener('click', () => app.runner.stop());
+  $('btnNewProject').addEventListener('click', newProject);
+  $('btnSummaryNew').addEventListener('click', newProject);
+  $('btnRegenerate').addEventListener('click', () => {
+    app.session.queue.forEach((i) => {
+      if (i.status === 'failed') {
+        i.status = 'pending';
+        i.error = '';
+      }
+    });
+    persistSession();
+    startRun(true);
+  });
+  $('btnZipResults').addEventListener('click', zipResults);
+  $('btnResultsToAssets').addEventListener('click', resultsToAssets);
+  $('btnOpenFolder').addEventListener('click', () => chrome.downloads.showDefaultFolder());
+  $('btnOpenFlow').addEventListener('click', () => chrome.tabs.create({ url: app.settings.flowUrl }));
+  $('btnCopyLog').addEventListener('click', async () => {
+    await navigator.clipboard.writeText(logLines.map((l) => `${l.t.toISOString()} [${l.level}] ${l.message}`).join('\n'));
+    toast('Log copied');
+  });
+  $('btnClearLog').addEventListener('click', () => {
+    logLines.length = 0;
+    $('logList').replaceChildren();
+    $('logCount').textContent = '';
+  });
+  on('settingsChanged', scheduleRender);
+
+  renderAll();
+  refreshConnection();
+  setInterval(() => {
+    if (app.runner.state !== 'running') refreshConnection();
+    if (app.runner.state !== 'idle') renderProgress();
+  }, 3000);
+  chrome.tabs.onActivated.addListener(() => app.runner.state !== 'running' && refreshConnection());
+  log('FlowBatch ready');
+}
+
+boot().catch((e) => {
+  console.error(e);
+  document.body.prepend(el('pre', { class: 'diag', text: `FlowBatch failed to start: ${e.stack || e.message}` }));
+});

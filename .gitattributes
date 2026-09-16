@@ -1,0 +1,10 @@
+# Normalise text to LF in the repository; Git still checks out native endings.
+* text=auto eol=lf
+
+*.js   text eol=lf
+*.json text eol=lf
+*.css  text eol=lf
+*.html text eol=lf
+*.md   text eol=lf
+
+*.png binary
