@@ -6,6 +6,31 @@ reference images mentioned in the prompt, types the prompt, and submits it. Then
 Flow finishes (or reports an error), downloads the result, and moves on to the next prompt.
 It also includes a frame extractor that saves an image from a video every N seconds.
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/panel.png" width="300" alt="FlowBatch side panel with assets and prompts loaded">
+  &nbsp;
+  <img src="docs/screenshots/frames.png" width="300" alt="Frame extractor with video preview and extracted frames">
+</p>
+<p align="center"><sub><b>The side panel</b> — reference images, prompts and generation options &nbsp;·&nbsp; <b>Frame extractor</b> — video preview, interval, and the extracted frame strip</sub></p>
+
+<p align="center">
+  <img src="docs/screenshots/queue.png" width="300" alt="Work queue showing finished and pending prompts">
+  &nbsp;
+  <img src="docs/screenshots/zip.png" width="300" alt="ZIP picker with some frames unticked">
+</p>
+<p align="center"><sub><b>Work queue</b> — one row per prompt, with result thumbnails &nbsp;·&nbsp; <b>ZIP picker</b> — untick anything you do not want, then choose where to save</sub></p>
+
+<p align="center">
+  <img src="docs/screenshots/video.png" width="300" alt="Video mode with sequential frames enabled">
+  &nbsp;
+  <img src="docs/screenshots/settings.png" width="300" alt="Settings view">
+</p>
+<p align="center"><sub><b>Sequential frames</b> — pair images as start → end for Flow's Frames to video &nbsp;·&nbsp; <b>Settings</b> — pacing, behaviour and Flow element calibration</sub></p>
+
+<sub><i>The panel is shown with placeholder images standing in for real video frames and Flow output.</i></sub>
+
 ## Install (unpacked)
 
 1. Open `chrome://extensions` and turn on **Developer mode** (top right).
