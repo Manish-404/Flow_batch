@@ -27,6 +27,15 @@ export const DEFAULT_SESSION = {
   count: 1,
   seqFrames: false,
   queue: [],
+  publish: {
+    source: 'results',
+    platforms: { ig: true, fb: true, yt: false },
+    template: '{summary}\n\n{tags}',
+    hashtags: '#anime #animeart #aiart #madewithai',
+    startAt: '',
+    everyHours: 9,
+    edits: {},
+  },
   frames: { source: 'video', interval: 1, start: 0, end: '', count: 10, prefix: 'f_', startNum: 1, format: 'png', toAssets: true, toDownloads: false, videoUrl: '', cropToVideo: true },
 };
 
@@ -76,6 +85,8 @@ export async function loadSession() {
   const { session } = await chrome.storage.local.get('session');
   const merged = { ...clone(DEFAULT_SESSION), ...(session || {}) };
   merged.frames = { ...DEFAULT_SESSION.frames, ...(session?.frames || {}) };
+  merged.publish = { ...DEFAULT_SESSION.publish, ...(session?.publish || {}) };
+  merged.publish.platforms = { ...DEFAULT_SESSION.publish.platforms, ...(session?.publish?.platforms || {}) };
   // A queue item left "running" by a closed panel is pending again.
   merged.queue = (merged.queue || []).map((q) => (q.status === 'running' ? { ...q, status: 'pending' } : q));
   return merged;

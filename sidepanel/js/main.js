@@ -6,9 +6,11 @@ import { initPrompt, setMode } from './prompt-ui.js';
 import { initFrames } from './frames-ui.js';
 import { initSettings, applyTheme } from './settings-ui.js';
 import { initZip, openZipPicker } from './zip-ui.js';
+import { initPublish } from './publish-ui.js';
+import { generatedResults } from './results.js';
 import { Runner } from './runner.js';
 import { findFlowTab, callAgent } from './flow.js';
-import { $, el, pad, slug, sanitizeSegment, splitPrompts, findMentions, fmtDuration, log, onLog, logLines, toast } from './utils.js';
+import { $, el, pad, sanitizeSegment, splitPrompts, findMentions, fmtDuration, log, onLog, logLines, toast } from './utils.js';
 
 let renderQueued = false;
 let lastStep = '';
@@ -278,25 +280,6 @@ async function newProject() {
 }
 
 // ---------------- generated results ----------------
-/** Every result of every successful item, with the same base name auto-download uses. */
-function generatedResults() {
-  const out = [];
-  for (const item of app.session.queue) {
-    if (item.status !== 'success') continue;
-    const base = sanitizeSegment(item.mentions.length ? item.mentions.join('_') : slug(item.prompt));
-    (item.results || []).forEach((res, k) => {
-      out.push({
-        id: `${item.id}_${k}`,
-        name: `${pad(item.n)}_${base}${item.results.length > 1 ? `_${k + 1}` : ''}`,
-        kind: res.kind,
-        thumbUrl: res.kind === 'image' && !res.url.startsWith('blob:') ? res.url : null,
-        res,
-      });
-    });
-  }
-  return out;
-}
-
 function zipResults() {
   const results = generatedResults();
   if (!results.length) return toast('No generated results yet');
@@ -419,6 +402,7 @@ async function boot() {
   initAssets();
   initPrompt();
   initFrames();
+  initPublish();
 
   $('projectName').value = app.session.projectName;
   $('projectName').addEventListener('input', (e) => {

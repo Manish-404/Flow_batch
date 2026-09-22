@@ -38,9 +38,11 @@ a direct video URL, or by capturing whatever is playing in a browser tab.
 <p align="center"><sub><b>ZIP picker</b> — untick anything you do not want, then choose where to save &nbsp;·&nbsp; <b>Sequential frames</b> — pair images as start → end for Flow's Frames to video</sub></p>
 
 <p align="center">
+  <img src="docs/screenshots/publish.png" width="300" alt="Publish queue with captions, hashtags and scheduled times">
+  &nbsp;
   <img src="docs/screenshots/settings.png" width="300" alt="Settings view">
 </p>
-<p align="center"><sub><b>Settings</b> — pacing, behaviour and Flow element calibration</sub></p>
+<p align="center"><sub><b>Publish queue</b> &mdash; captions from your prompts, suggested hashtags and a posting time per item &nbsp;&middot;&nbsp; <b>Settings</b> &mdash; pacing, behaviour and Flow element calibration</sub></p>
 
 <sub><i>The panel is shown with placeholder images standing in for real video frames and Flow output.</i></sub>
 
@@ -99,6 +101,48 @@ and says so in the log.
 > FlowBatch does not download videos from YouTube, Instagram, Facebook or Threads. Those platforms prohibit it in their
 > terms, and the Chrome Web Store bans extensions that do it. *Capture tab* records rendered output from your own
 > browser and *From URL* reads direct media links — use them for footage you own or are licensed to use.
+
+## Publish queue: captions, hashtags and a schedule
+
+The **Publish queue** card turns finished results into posts you can schedule. It prepares them —
+it does not post for you, and it never asks for your social logins.
+
+1. Pick the source: **Generated results** or **Assets**.
+2. Tick the platforms the batch is for. This only labels the export; nothing is sent anywhere.
+3. Write a **caption template**. Placeholders are filled per item:
+   `{summary}` `{prompt}` `{project}` `{name}` `{n}` `{tags}` `{date}`.
+4. Set the **hashtags**, or press **Suggest from prompts**.
+5. Set **First post** and **Then every (hours)**. Times are spread from the first one.
+6. Press **Build plan**, edit any row (click it to open the caption and time), untick what you do
+   not want, then **⤓ Export ZIP…** and choose where to save it.
+
+The archive contains:
+
+```
+media/001_f_001.png      the file itself
+captions/001_f_001.txt   its caption, ready to paste
+captions.csv             file, time, platforms, caption — opens in any spreadsheet
+schedule.json            the same thing, structured
+```
+
+Load that into Meta Business Suite's Planner or YouTube Studio and schedule from there. Both
+publish server-side, so posts go out with your browser closed.
+
+### About the hashtags
+
+They are derived from **your own prompt text**, which already describes the picture in detail.
+Curated matches come first — a prompt mentioning cel-shading gets `#celshading` — ranked by how
+often each theme comes up, with what is *depicted* biased above how it is *rendered*. Distinctive
+words from the prompt fill the rest.
+
+They are deliberately **not** "trending" tags. No platform exposes trending-hashtag data through its
+API: Instagram's hashtag search returns top media for a tag you already name, capped at 30 unique
+tags per 7 days, with no trend ranking. Anything advertising weekly trending data is scraping or
+reselling scraped data. Relevant tags you can edit beat invented ones.
+
+`#madewithai` and friends are suggested by default. Instagram, Facebook and YouTube all require you
+to disclose realistic AI-generated media — use each platform's own AI-content label as well, since
+a hashtag alone does not satisfy those policies.
 
 ## Downloading a batch as one ZIP
 
@@ -174,4 +218,7 @@ IDs. If a step fails (see **Activity log**):
 | `sidepanel/js/frames.js` | Frame extraction: local/URL video seeking, and `tabCapture` of the active tab |
 | `sidepanel/js/zip.js` | ZIP writer (stored entries, ZIP64 when an archive needs it) |
 | `sidepanel/js/zip-ui.js` | The "pick what goes in the ZIP" sheet |
+| `sidepanel/js/publish-ui.js` | Publish queue: caption templates, schedule plan, batch export |
+| `sidepanel/js/hashtags.js` | Caption summaries and prompt-derived hashtags |
+| `sidepanel/js/results.js` | Shared access to the queue's generated results |
 | `sidepanel/js/*-ui.js`, `main.js` | Panel UI |

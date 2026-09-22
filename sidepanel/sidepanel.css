@@ -147,6 +147,22 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .zip-tile input { position: absolute; top: 7px; left: 7px; margin: 0; accent-color: var(--accent); width: 16px; height: 16px; }
 .zip-name { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* publish queue */
+.pub-template { font: 13px/1.5 'Segoe UI', system-ui, sans-serif; resize: vertical; }
+.pub-list { display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow-y: auto; }
+.pub-list:empty { display: none; }
+.pub-row { border: 1px solid var(--border); background: var(--card-2); border-radius: 10px; overflow: hidden; }
+.pub-row.off { opacity: 0.45; }
+.pub-head { display: grid; grid-template-columns: auto 44px 1fr; align-items: center; gap: 8px; padding: 7px 9px; cursor: pointer; }
+.pub-head input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+.pub-head img, .pub-noimg { width: 44px; height: 44px; object-fit: cover; border-radius: 7px; display: block; background: var(--field); }
+.pub-noimg { display: grid; place-items: center; font-size: 19px; }
+.pub-meta { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+.pub-meta b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pub-when { font-size: 11px; color: var(--accent-2); font-weight: 600; }
+.pub-cap { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pub-edit { display: flex; flex-direction: column; gap: 8px; padding: 0 9px 9px; }
+
 /* chips */
 .chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 104px; overflow-y: auto; }
 .chips:empty { display: none; }

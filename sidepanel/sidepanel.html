@@ -201,6 +201,56 @@
         <button id="btnSummaryNew" class="btn btn-outline btn-block">New project</button>
       </section>
 
+      <!-- Publish queue -->
+      <details id="publishCard" class="card collapsible">
+        <summary class="card-head">
+          <h2>Publish queue</h2>
+          <span class="muted small">captions · hashtags · schedule</span>
+        </summary>
+        <p class="muted small">
+          Prepares posts from your results — caption, hashtags and a time per item — and exports one ZIP
+          you load into Instagram, Facebook or YouTube's own scheduler. FlowBatch does not post for you.
+        </p>
+        <div class="seg seg-sm" role="tablist">
+          <button class="seg-btn active" data-pub-source="results">Generated results</button>
+          <button class="seg-btn" data-pub-source="assets">Assets</button>
+        </div>
+        <div class="checks">
+          <label class="check"><input id="pubIG" type="checkbox" checked /> Instagram</label>
+          <label class="check"><input id="pubFB" type="checkbox" checked /> Facebook</label>
+          <label class="check"><input id="pubYT" type="checkbox" /> YouTube</label>
+        </div>
+        <label class="field"><span>Caption template</span>
+          <textarea id="pubTemplate" class="input pub-template" rows="3" spellcheck="false"></textarea>
+        </label>
+        <p class="muted small">
+          <code>{summary}</code> <code>{prompt}</code> <code>{project}</code> <code>{name}</code>
+          <code>{n}</code> <code>{tags}</code> <code>{date}</code>
+        </p>
+        <label class="field"><span>Hashtags</span>
+          <textarea id="pubHashtags" class="input" rows="2" spellcheck="false"></textarea>
+        </label>
+        <div class="row between">
+          <button id="btnSuggestTags" class="btn btn-ghost btn-sm">Suggest from prompts</button>
+          <span id="pubTagCount" class="muted small"></span>
+        </div>
+        <div class="grid-2">
+          <label class="field"><span>First post</span><input id="pubStart" class="input" type="datetime-local" /></label>
+          <label class="field"><span>Then every (hours)</span><input id="pubEvery" class="input" type="number" min="0.25" step="0.25" /></label>
+        </div>
+        <div class="row">
+          <button id="btnBuildPlan" class="btn btn-primary grow">Build plan</button>
+          <button id="btnExportPlan" class="btn btn-ghost" disabled>⤓ Export ZIP…</button>
+        </div>
+        <div class="row between">
+          <span id="pubCount" class="muted small"></span>
+          <button id="btnClearPlan" class="btn btn-ghost btn-sm">Clear plan</button>
+        </div>
+        <div id="pubProgressWrap" class="bar" hidden><div id="pubProgress" class="bar-fill"></div></div>
+        <div id="pubStatus" class="muted small"></div>
+        <div id="pubList" class="pub-list"></div>
+      </details>
+
       <!-- Log -->
       <details class="card collapsible" id="logCard">
         <summary class="card-head"><h2>Activity log</h2><span id="logCount" class="muted small"></span></summary>
