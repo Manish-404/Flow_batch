@@ -27,7 +27,7 @@ export const DEFAULT_SESSION = {
   count: 1,
   seqFrames: false,
   queue: [],
-  frames: { source: 'video', interval: 1, start: 0, end: '', count: 10, prefix: 'f_', startNum: 1, format: 'png', toAssets: true, toDownloads: false },
+  frames: { source: 'video', interval: 1, start: 0, end: '', count: 10, prefix: 'f_', startNum: 1, format: 'png', toAssets: true, toDownloads: false, videoUrl: '', cropToVideo: true },
 };
 
 export const MODELS = {

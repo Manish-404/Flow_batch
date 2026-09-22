@@ -1,10 +1,10 @@
 // "Frame extractor" card.
 import { app, on, persistSession } from './app.js';
 import { addAssets, removeAssets } from './assets-ui.js';
-import { probeVideo, frameTimes, extractVideoFrames, captureTabFrames, MAX_FRAMES } from './frames.js';
+import { probeVideo, frameTimes, extractVideoFrames, captureTabStream, captureTabFrames, fetchVideoFile, MAX_FRAMES } from './frames.js';
 import { downloadBlob } from './downloads.js';
 import { openZipPicker } from './zip-ui.js';
-import { $, el, pad, sanitizeSegment, log, toast } from './utils.js';
+import { $, el, pad, sanitizeSegment, fmtDuration, log, toast } from './utils.js';
 
 let videoFile = null;
 let videoInfo = null;
@@ -13,13 +13,18 @@ let controller = null;
 let extracted = []; // { id, name, blob, time, assetId, thumbUrl } from the latest run
 
 const f = () => app.session.frames;
+const isTab = () => f().source === 'tab';
 
 function syncSource() {
-  const tab = f().source === 'tab';
-  document.querySelectorAll('[data-frame-source]').forEach((b) => b.classList.toggle('active', b.dataset.frameSource === f().source));
-  $('frameVideoBox').hidden = tab;
-  document.querySelectorAll('[data-video-only]').forEach((n) => (n.hidden = tab));
-  document.querySelectorAll('[data-tab-only]').forEach((n) => (n.hidden = !tab));
+  const src = f().source;
+  document.querySelectorAll('[data-frame-source]').forEach((b) => b.classList.toggle('active', b.dataset.frameSource === src));
+  $('frameFileBox').hidden = src !== 'video';
+  $('frameUrlBox').hidden = src !== 'url';
+  $('frameCaptureBox').hidden = src !== 'tab';
+  $('frameVideoBox').hidden = src === 'tab';
+  document.querySelectorAll('[data-video-only]').forEach((n) => (n.hidden = src === 'tab'));
+  document.querySelectorAll('[data-tab-only]').forEach((n) => (n.hidden = src !== 'tab'));
+  $('btnExtract').textContent = src === 'tab' ? 'Capture frames' : 'Extract frames';
   updateEstimate();
 }
 
@@ -27,13 +32,14 @@ function updateEstimate() {
   const o = f();
   let text = '';
   if (o.source === 'tab') {
-    const secs = Math.max(0.5, Number(o.interval) || 1);
-    text = `≈ ${Math.min(MAX_FRAMES, Number(o.count) || 0)} screenshots of the active tab, one every ${secs}s (min 0.5s).`;
+    const secs = Math.max(0.05, Number(o.interval) || 1);
+    const n = Math.min(MAX_FRAMES, Number(o.count) || 0);
+    text = `≈ ${n} frame${n === 1 ? '' : 's'} from the active tab, one every ${secs}s · about ${fmtDuration(n * secs * 1000)} of real time`;
   } else if (videoInfo) {
     const n = frameTimes(videoInfo.duration, o).length;
     text = `≈ ${n} frame${n === 1 ? '' : 's'} · ${o.prefix}${pad(o.startNum)} … ${o.prefix}${pad(Number(o.startNum) + n - 1)}${n >= MAX_FRAMES ? ` (capped at ${MAX_FRAMES})` : ''}`;
   } else {
-    text = 'Choose a video to see how many frames will be extracted.';
+    text = o.source === 'url' ? 'Load a video URL to see how many frames will be extracted.' : 'Choose a video to see how many frames will be extracted.';
   }
   $('frameEstimate').textContent = text;
 }
@@ -47,6 +53,49 @@ function renderResultRow() {
 function releaseExtracted() {
   extracted.forEach((e) => e.thumbUrl && URL.revokeObjectURL(e.thumbUrl));
   extracted = [];
+}
+
+/** Adopt a File (picked from disk or fetched from a URL) as the extraction source. */
+async function useVideoFile(file) {
+  try {
+    videoInfo = await probeVideo(file);
+    videoFile = file;
+    if (videoUrl) URL.revokeObjectURL(videoUrl);
+    videoUrl = URL.createObjectURL(file);
+    $('videoPreview').src = videoUrl;
+    $('videoPreview').hidden = false;
+    $('videoMeta').textContent = `${file.name} · ${videoInfo.duration.toFixed(2)}s · ${videoInfo.width}×${videoInfo.height}`;
+    $('btnChooseVideo').textContent = 'Change video…';
+  } catch (e) {
+    videoFile = null;
+    videoInfo = null;
+    $('videoPreview').hidden = true;
+    $('videoMeta').textContent = e.message;
+    toast(e.message, 4000);
+  }
+  updateEstimate();
+}
+
+async function loadFromUrl() {
+  const url = $('frameVideoUrl').value.trim();
+  if (!url) return toast('Paste a link to a video file');
+  const btn = $('btnLoadUrl');
+  btn.disabled = true;
+  btn.textContent = 'Loading…';
+  $('videoMeta').textContent = 'Fetching…';
+  try {
+    const file = await fetchVideoFile(url);
+    await useVideoFile(file);
+    log(`Loaded video from URL: ${file.name} (${Math.round(file.size / 1024)} KB)`, 'ok');
+  } catch (e) {
+    $('videoMeta').textContent = e.message;
+    log(`Video URL failed: ${e.message}`, 'error');
+    toast(e.message, 5000);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Load';
+  }
+  return undefined;
 }
 
 async function clearFrames() {
@@ -86,7 +135,7 @@ function bindInput(id, key, parse = (v) => v) {
 
 async function run() {
   const o = { ...f() };
-  if (o.source === 'video' && !videoFile) return toast('Choose a video first');
+  if (!isTab() && !videoFile) return toast(o.source === 'url' ? 'Load a video URL first' : 'Choose a video first');
   const prefix = String(o.prefix ?? '').replace(/[^A-Za-z0-9_-]+/g, '_');
   const folder = `${sanitizeSegment(app.settings.baseFolder, 'FlowBatch')}/${sanitizeSegment(app.session.projectName, 'Untitled')}/frames`;
   controller = new AbortController();
@@ -124,16 +173,30 @@ async function run() {
     if (pending.length >= 10) await flush();
   };
   const onProgress = (p) => ($('frameProgress').style.width = `${Math.round(p * 100)}%`);
+  const onStream = (stream) => {
+    const pv = $('capturePreview');
+    pv.srcObject = stream;
+    pv.hidden = false;
+    pv.play().catch(() => {});
+  };
+  const onNote = (m) => log(m, 'warn');
 
   try {
-    if (o.source === 'tab') {
-      const win = await chrome.windows.getLastFocused({ windowTypes: ['normal'] });
-      await captureTabFrames({ windowId: win.id, interval: o.interval, count: o.count, format: o.format }, { onFrame, onProgress, signal: controller.signal });
+    if (isTab()) {
+      const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      if (!tab) throw new Error('No active tab to capture');
+      log(`Capturing tab: ${tab.title || tab.url}`);
+      try {
+        await captureTabStream({ tabId: tab.id, ...o }, { onFrame, onProgress, onStream, onNote, signal: controller.signal });
+      } catch (e) {
+        log(`Tab capture unavailable (${e.message}) — falling back to tab screenshots at 2/sec`, 'warn');
+        await captureTabFrames({ windowId: tab.windowId, ...o }, { onFrame, onProgress, signal: controller.signal });
+      }
     } else {
       await extractVideoFrames(videoFile, o, { onFrame, onProgress, signal: controller.signal });
     }
     await flush();
-    const msg = `${controller.signal.aborted ? 'Cancelled after' : 'Extracted'} ${total} frame${total === 1 ? '' : 's'}`;
+    const msg = `${controller.signal.aborted ? 'Cancelled after' : 'Captured'} ${total} frame${total === 1 ? '' : 's'}`;
     log(`${msg}${o.toAssets ? ' → assets' : ''}${o.toDownloads ? ` → Downloads/${folder}` : ''}`, 'ok');
     toast(msg);
   } catch (e) {
@@ -142,10 +205,14 @@ async function run() {
     toast(e.message, 4000);
   } finally {
     controller = null;
+    const pv = $('capturePreview');
+    pv.srcObject = null;
+    pv.hidden = true;
     $('btnExtract').disabled = false;
     $('btnCancelExtract').hidden = true;
     renderResultRow();
   }
+  return undefined;
 }
 
 export function initFrames() {
@@ -160,24 +227,10 @@ export function initFrames() {
   $('videoInput').addEventListener('change', async () => {
     const file = $('videoInput').files[0];
     $('videoInput').value = '';
-    if (!file) return;
-    try {
-      videoInfo = await probeVideo(file);
-      videoFile = file;
-      if (videoUrl) URL.revokeObjectURL(videoUrl);
-      videoUrl = URL.createObjectURL(file);
-      $('videoPreview').src = videoUrl;
-      $('videoPreview').hidden = false;
-      $('videoMeta').textContent = `${file.name} · ${videoInfo.duration.toFixed(2)}s · ${videoInfo.width}×${videoInfo.height}`;
-      $('btnChooseVideo').textContent = 'Change video…';
-    } catch (e) {
-      videoFile = null;
-      videoInfo = null;
-      $('videoPreview').hidden = true;
-      $('videoMeta').textContent = e.message;
-    }
-    updateEstimate();
+    if (file) await useVideoFile(file);
   });
+  $('btnLoadUrl').addEventListener('click', loadFromUrl);
+  $('frameVideoUrl').addEventListener('keydown', (e) => e.key === 'Enter' && loadFromUrl());
   const num = (v) => (v === '' ? '' : Number(v));
   bindInput('frameInterval', 'interval', num);
   bindInput('frameStart', 'start', num);
@@ -188,6 +241,8 @@ export function initFrames() {
   bindInput('frameFormat', 'format');
   bindInput('frameToAssets', 'toAssets');
   bindInput('frameToDownloads', 'toDownloads');
+  bindInput('frameCropToVideo', 'cropToVideo');
+  bindInput('frameVideoUrl', 'videoUrl');
   $('btnExtract').addEventListener('click', run);
   $('btnCancelExtract').addEventListener('click', () => controller?.abort());
   $('btnZipFrames').addEventListener('click', zipFrames);

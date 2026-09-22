@@ -24,7 +24,7 @@
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["sidePanel", "storage", "unlimitedStorage", "downloads", "tabs", "scripting"],
+  "permissions": ["sidePanel", "storage", "unlimitedStorage", "downloads", "tabs", "scripting", "tabCapture"],
   "host_permissions": ["<all_urls>"],
   "content_scripts": [
     {

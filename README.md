@@ -4,7 +4,8 @@ FlowBatch is a Chrome side-panel extension. It runs a queue of 20–30+ prompts 
 [Google Flow](https://flow.google.com/), one prompt at a time. For each prompt it attaches the
 reference images mentioned in the prompt, types the prompt, and submits it. Then it waits until
 Flow finishes (or reports an error), downloads the result, and moves on to the next prompt.
-It also includes a frame extractor that saves an image from a video every N seconds.
+It also includes a frame extractor that turns a video into stills every N seconds — from a local file,
+a direct video URL, or by capturing whatever is playing in a browser tab.
 
 ## Screenshots
 
@@ -21,6 +22,13 @@ It also includes a frame extractor that saves an image from a video every N seco
   <img src="docs/screenshots/queue.png" width="300" alt="Work queue showing finished and pending prompts">
 </p>
 <p align="center"><sub><b>Frame extractor</b> — video preview, interval, and the extracted frame strip &nbsp;·&nbsp; <b>Work queue</b> — one row per prompt, with result thumbnails</sub></p>
+
+<p align="center">
+  <img src="docs/screenshots/url.png" width="300" alt="Frame extractor loading a direct video URL">
+  &nbsp;
+  <img src="docs/screenshots/capture.png" width="300" alt="Frame extractor capturing the active tab">
+</p>
+<p align="center"><sub><b>From URL</b> — a direct link to a video file you host &nbsp;·&nbsp; <b>Capture tab</b> — frames from whatever is playing in the browser, cropped to the video</sub></p>
 
 <p align="center">
   <img src="docs/screenshots/zip.png" width="300" alt="ZIP picker with some frames unticked">
@@ -47,11 +55,10 @@ After you edit any file, click **Reload** on the extension card and reload the F
 
 ## Typical workflow (video → anime frames)
 
-1. **Frame extractor** (expand the card): choose the video — a small preview player appears so you can scrub to the part
-   you want — and set **Interval** (for example, `0.5` saves 2 frames per second). Set the prefix to `f_` and the start
-   number to `1`, then click **Extract frames**. The frames are added to **Upload assets** as `f_001`, `f_002`, and so on.
-   Tick *Save frames to Downloads* if you also want the frames saved as files.
-   *Screenshot tab* mode instead captures the active tab every N seconds (at most 2 captures per second).
+1. **Frame extractor** (expand the card): pick where the video comes from — see
+   [Where frames come from](#where-frames-come-from) — then set **Interval** (for example, `0.5` saves 2 frames per
+   second). Set the prefix to `f_` and the start number to `1`, then click **Extract frames**. The frames are added to
+   **Upload assets** as `f_001`, `f_002`, and so on. Tick *Save frames to Downloads* if you also want them saved as files.
    After a run, **⤓ ZIP…** packs the frames into one archive and **Clear frames** throws the whole batch away
    (including the assets it created) for a clean slate.
 2. **Prompt input**: write the conversion prompt once, using `{asset}` (or a single `@f_001`)
@@ -67,6 +74,31 @@ After you edit any file, click **Reload** on the extension card and reload the F
 Other ways to add images: drag and drop them, browse for files, or **Choose folder instead**. Rename an image in its card
 and every `@mention` of it in your prompts is updated. Type `@` in the prompt box to pick an image from a list.
 Press `Ctrl + Enter` to insert a separator.
+
+## Where frames come from
+
+The frame extractor has three sources.
+
+**Video file** — pick a file from disk. A preview player appears so you can scrub to the part you want, and
+*Start* / *End* limit extraction to a slice. Frames are taken by seeking, so the interval is exact.
+
+**From URL** — paste a **direct link to a video file** (`.mp4`, `.webm`, `.mov`) that you host or have the rights to:
+your own CDN, object storage, or a file server. FlowBatch fetches it and then behaves exactly like the file picker.
+A link to a *page* comes back as HTML and is rejected with a message — this reads media files, it does not scrape pages.
+
+**Capture tab** — records what Chrome is already rendering on the active tab, the way a screen recorder does, using
+`chrome.tabCapture`. Start the video playing, then press **Capture frames**. With *Crop to the video on the page* ticked,
+FlowBatch locates the largest `<video>` element, scrolls it into view and crops each frame to it, so you get the picture
+without the page around it. A live preview shows what is being captured.
+
+Because this is a live stream rather than a seekable file, the tab plays in real time while it runs: 31 frames at 0.5s
+apart takes about 16 seconds. The estimate line tells you how long before you start. If `tabCapture` is unavailable
+(a `chrome://` page, for example) FlowBatch falls back to the old `captureVisibleTab` path at about 2 frames per second
+and says so in the log.
+
+> FlowBatch does not download videos from YouTube, Instagram, Facebook or Threads. Those platforms prohibit it in their
+> terms, and the Chrome Web Store bans extensions that do it. *Capture tab* records rendered output from your own
+> browser and *From URL* reads direct media links — use them for footage you own or are licensed to use.
 
 ## Downloading a batch as one ZIP
 
@@ -139,7 +171,7 @@ IDs. If a step fails (see **Activity log**):
 | `content/dom.js` | Element finders, clicking and typing helpers, result/progress/error detection, element picker |
 | `content/flow-agent.js` | Actions the panel calls: `attachImage`, `setPrompt`, `submit`, `poll`, `applySettings`, … |
 | `sidepanel/js/runner.js` | Queue loop: upload → type → submit → wait → download → delay |
-| `sidepanel/js/frames.js` | Video frame extraction and timed tab screenshots |
+| `sidepanel/js/frames.js` | Frame extraction: local/URL video seeking, and `tabCapture` of the active tab |
 | `sidepanel/js/zip.js` | ZIP writer (stored entries, ZIP64 when an archive needs it) |
 | `sidepanel/js/zip-ui.js` | The "pick what goes in the ZIP" sheet |
 | `sidepanel/js/*-ui.js`, `main.js` | Panel UI |

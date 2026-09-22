@@ -103,7 +103,147 @@ export async function extractVideoFrames(file, opts, { onFrame, onProgress, sign
   }
 }
 
-// chrome.tabs.captureVisibleTab is limited to ~2 calls per second.
+/**
+ * Load a direct link to a video file (your own CDN, Drive, S3, …) as if it had been
+ * picked from disk. A page URL comes back as text/html and is rejected — this reads
+ * media files, it does not scrape pages or streams.
+ */
+export async function fetchVideoFile(url) {
+  const clean = String(url || '').trim();
+  if (!/^https?:\/\//i.test(clean)) throw new Error('Enter an http(s) link to a video file');
+  let res;
+  try {
+    res = await fetch(clean, { credentials: 'omit' });
+  } catch (e) {
+    throw new Error(`Could not fetch that URL (${e.message}). It may block cross-origin requests.`);
+  }
+  if (!res.ok) throw new Error(`The server answered HTTP ${res.status}`);
+  const mime = (res.headers.get('content-type') || '').split(';')[0].trim();
+  const looksLikeFile = /\.(mp4|webm|mov|m4v|ogv)(\?|#|$)/i.test(clean);
+  if (!/^video\//i.test(mime) && !looksLikeFile) {
+    throw new Error(`That link returned ${mime || 'no media type'} — paste a direct link to a video file, not a page`);
+  }
+  const blob = await res.blob();
+  if (!blob.size) throw new Error('That link returned an empty file');
+  const name = decodeURIComponent(clean.split(/[?#]/)[0].split('/').pop() || '') || 'video.mp4';
+  return new File([blob], name, { type: /^video\//i.test(blob.type) ? blob.type : 'video/mp4' });
+}
+
+/** Where the biggest <video> on a tab sits, so the capture can be cropped to it. */
+async function probeTabVideo(tabId) {
+  try {
+    const [hit] = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: async () => {
+        const shown = [...document.querySelectorAll('video')].filter((v) => {
+          const r = v.getBoundingClientRect();
+          return r.width > 40 && r.height > 40;
+        });
+        if (!shown.length) return null;
+        const area = (v) => {
+          const r = v.getBoundingClientRect();
+          return r.width * r.height;
+        };
+        const v = shown.sort((a, b) => area(b) - area(a))[0];
+        v.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
+        await new Promise((r) => setTimeout(r, 250));
+        const r = v.getBoundingClientRect();
+        return {
+          x: r.left, y: r.top, w: r.width, h: r.height,
+          viewW: innerWidth, viewH: innerHeight,
+          vw: v.videoWidth, vh: v.videoHeight,
+          paused: v.paused, duration: v.duration,
+        };
+      },
+    });
+    return hit?.result || null;
+  } catch {
+    return null; // restricted page, or no host access
+  }
+}
+
+function waitForVideoReady(video, timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('The tab stream never produced a frame')), timeoutMs);
+    const done = () => {
+      if (!video.videoWidth) return;
+      clearTimeout(t);
+      video.removeEventListener('loadedmetadata', done);
+      video.removeEventListener('playing', done);
+      resolve();
+    };
+    video.addEventListener('loadedmetadata', done);
+    video.addEventListener('playing', done);
+  });
+}
+
+/**
+ * Grab frames from a live tab-capture stream at the chosen interval. This records what the
+ * browser is already rendering (like a screen recorder) — the tab plays in real time while
+ * it runs, so N frames at S seconds apart takes N x S seconds.
+ */
+export async function captureTabStream({ tabId, interval, count, format, cropToVideo }, { onFrame, onProgress, onStream, onNote, signal }) {
+  const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { mandatory: { chromeMediaSource: 'tab', chromeMediaSourceId: streamId } },
+  });
+  const video = document.createElement('video');
+  video.srcObject = stream;
+  video.muted = true;
+  video.playsInline = true;
+  const stop = () => {
+    stream.getTracks().forEach((t) => t.stop());
+    video.srcObject = null;
+  };
+
+  try {
+    await video.play();
+    await waitForVideoReady(video);
+    onStream?.(stream);
+
+    let crop = { x: 0, y: 0, w: video.videoWidth, h: video.videoHeight };
+    if (cropToVideo) {
+      const info = await probeTabVideo(tabId);
+      if (info && info.viewW && info.viewH) {
+        const sx = video.videoWidth / info.viewW;
+        const sy = video.videoHeight / info.viewH;
+        const x = Math.max(0, Math.round(info.x * sx));
+        const y = Math.max(0, Math.round(info.y * sy));
+        const w = Math.min(video.videoWidth - x, Math.round(info.w * sx));
+        const h = Math.min(video.videoHeight - y, Math.round(info.h * sy));
+        if (w > 20 && h > 20) {
+          crop = { x, y, w, h };
+          if (info.paused) onNote?.('The video on that tab is paused — press play so the frames differ');
+        } else onNote?.('Video element found but off-screen — capturing the whole tab');
+      } else onNote?.('No <video> found on that tab — capturing the whole tab');
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = crop.w;
+    canvas.height = crop.h;
+    const ctx = canvas.getContext('2d');
+    const mime = format === 'jpg' ? 'image/jpeg' : 'image/png';
+    const stepMs = Math.max(50, (Number(interval) || 1) * 1000);
+    const total = Math.min(MAX_FRAMES, Math.max(1, Number(count) || 1));
+
+    for (let i = 0; i < total; i++) {
+      if (signal?.aborted) break;
+      const t0 = Date.now();
+      ctx.drawImage(video, crop.x, crop.y, crop.w, crop.h, 0, 0, crop.w, crop.h);
+      const blob = await toBlob(canvas, mime);
+      await onFrame({ index: i, time: (i * stepMs) / 1000, blob });
+      onProgress?.((i + 1) / total);
+      if (i < total - 1) {
+        const until = t0 + stepMs;
+        while (Date.now() < until && !signal?.aborted) await sleep(Math.min(120, until - Date.now()));
+      }
+    }
+  } finally {
+    stop();
+  }
+}
+
+// Fallback: chrome.tabs.captureVisibleTab is limited to ~2 calls per second.
 export async function captureTabFrames({ windowId, interval, count, format }, { onFrame, onProgress, signal }) {
   const stepMs = Math.max(500, (Number(interval) || 1) * 1000);
   const total = Math.min(MAX_FRAMES, Math.max(1, Number(count) || 1));

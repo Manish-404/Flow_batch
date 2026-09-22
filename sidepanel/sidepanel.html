@@ -49,11 +49,25 @@
         </summary>
         <div class="seg seg-sm" role="tablist">
           <button class="seg-btn active" data-frame-source="video">Video file</button>
-          <button class="seg-btn" data-frame-source="tab">Screenshot tab</button>
+          <button class="seg-btn" data-frame-source="url">From URL</button>
+          <button class="seg-btn" data-frame-source="tab">Capture tab</button>
         </div>
-        <div id="frameVideoBox" class="stack">
+        <div id="frameFileBox" class="stack">
           <button id="btnChooseVideo" class="btn btn-ghost btn-block">Choose video…</button>
           <input id="videoInput" type="file" accept="video/*" hidden />
+        </div>
+        <div id="frameUrlBox" class="stack" hidden>
+          <div class="row">
+            <input id="frameVideoUrl" class="input grow" type="url" spellcheck="false" placeholder="https://…/clip.mp4" />
+            <button id="btnLoadUrl" class="btn btn-ghost">Load</button>
+          </div>
+          <p class="muted small">A direct link to a video file you host or have the rights to — not a page on a video site.</p>
+        </div>
+        <div id="frameCaptureBox" class="stack" hidden>
+          <p class="muted small">Records what the browser is already showing on the active tab, like a screen recorder. Start the video playing, then press <b>Capture frames</b> — the tab plays in real time while it runs.</p>
+          <video id="capturePreview" class="video-preview" muted playsinline hidden></video>
+        </div>
+        <div id="frameVideoBox" class="stack">
           <video id="videoPreview" class="video-preview" controls muted playsinline preload="metadata" hidden></video>
           <div id="videoMeta" class="muted small"></div>
         </div>
@@ -71,6 +85,7 @@
         <div class="checks">
           <label class="check"><input id="frameToAssets" type="checkbox" checked /> Add frames to assets</label>
           <label class="check"><input id="frameToDownloads" type="checkbox" /> Save frames to Downloads</label>
+          <label class="check" data-tab-only hidden><input id="frameCropToVideo" type="checkbox" checked /> Crop to the video on the page</label>
         </div>
         <div id="frameEstimate" class="muted small"></div>
         <div class="row">
