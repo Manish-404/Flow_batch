@@ -103,6 +103,55 @@
         <div id="framePreview" class="frame-strip"></div>
       </details>
 
+      <!-- Split video -->
+      <details id="splitCard" class="card collapsible">
+        <summary class="card-head">
+          <h2>Split video</h2>
+          <span class="muted small">cut into clips every N sec</span>
+        </summary>
+        <p class="muted small">
+          Cuts the video loaded in <b>Frame extractor</b> into clips. Chrome plays the source and re-records
+          each clip, so a split takes about as long as the part you split, and clips are re-encoded.
+        </p>
+        <div id="splitSource" class="small"></div>
+        <div class="grid-3">
+          <label class="field"><span>Clip length (sec)</span><input id="splitLen" class="input" type="number" min="0.2" step="0.5" /></label>
+          <label class="field"><span>Start (sec)</span><input id="splitStart" class="input" type="number" min="0" step="0.1" /></label>
+          <label class="field"><span>End (sec)</span><input id="splitEnd" class="input" type="number" min="0" step="0.1" placeholder="end" /></label>
+          <label class="field"><span>Name prefix</span><input id="splitPrefix" class="input" spellcheck="false" /></label>
+          <label class="field"><span>Format</span>
+            <select id="splitFormat" class="input"><option value="webm">WebM</option><option value="mp4">MP4 if possible</option></select>
+          </label>
+          <label class="field"><span>Quality</span>
+            <select id="splitQuality" class="input"><option value="high">High</option><option value="medium">Medium</option><option value="small">Small</option></select>
+          </label>
+        </div>
+        <div class="checks">
+          <label class="check"><input id="splitToDownloads" type="checkbox" /> Save each clip to Downloads as it finishes</label>
+        </div>
+        <div id="splitEstimate" class="muted small"></div>
+        <div class="row">
+          <button id="btnSplit" class="btn btn-primary grow">Split video</button>
+          <button id="btnCancelSplit" class="btn btn-ghost" hidden>Cancel</button>
+        </div>
+        <div id="splitProgressWrap" class="bar" hidden><div id="splitProgress" class="bar-fill"></div></div>
+        <div id="splitStatus" class="muted small"></div>
+        <div class="row between" id="splitActions" hidden>
+          <span id="splitCount" class="muted small"></span>
+          <div class="row">
+            <button id="btnSplitAll" class="btn btn-ghost btn-sm">All</button>
+            <button id="btnSplitNone" class="btn btn-ghost btn-sm">None</button>
+            <button id="btnSplitClear" class="btn btn-ghost btn-sm">Clear</button>
+          </div>
+        </div>
+        <div id="splitList" class="split-list"></div>
+        <div class="row" id="splitExport" hidden>
+          <button id="btnSplitSave" class="btn btn-ghost grow" title="Save the selected clips to Downloads">⤓ Save</button>
+          <button id="btnSplitZip" class="btn btn-ghost grow" title="Pick clips and save them as one ZIP">⤓ ZIP…</button>
+          <button id="btnSplitToFlow" class="btn btn-outline grow" title="Attach the selected clips to Flow's prompt box">Send to Flow</button>
+        </div>
+      </details>
+
       <!-- Prompt input -->
       <section class="card">
         <div class="card-head"><h2>Prompt input</h2><span id="promptStats" class="muted small">0 prompts</span></div>

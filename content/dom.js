@@ -344,16 +344,17 @@
   FB.visibleDialogs = visibleDialogs;
 
   // ---------- file inputs ----------
-  function pickFileInput(composer, preferCaptured) {
+  function pickFileInput(composer, preferCaptured, kind = 'image') {
     const inputs = $$('input[type="file"]').filter((i) => !i.disabled);
     if (!inputs.length) return null;
     const captured = inputs
       .filter((i) => i.hasAttribute('data-flowbatch-captured'))
       .sort((a, b) => +b.getAttribute('data-flowbatch-captured') - +a.getAttribute('data-flowbatch-captured'));
     if (preferCaptured && captured[0]) return captured[0];
-    const acceptsImage = (i) => !i.accept || /image|\*|png|jpe?g|webp/i.test(i.accept);
-    const inComposer = composer ? inputs.filter((i) => composer.contains(i) && acceptsImage(i)) : [];
-    return captured[0] || inComposer[0] || inputs.find(acceptsImage) || null;
+    const wants = kind === 'video' ? /video|\*|mp4|webm|mov/i : /image|\*|png|jpe?g|webp/i;
+    const accepts = (i) => !i.accept || wants.test(i.accept);
+    const inComposer = composer ? inputs.filter((i) => composer.contains(i) && accepts(i)) : [];
+    return captured[0] || inComposer[0] || inputs.find(accepts) || null;
   }
   FB.pickFileInput = pickFileInput;
 

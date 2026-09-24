@@ -38,11 +38,16 @@ a direct video URL, or by capturing whatever is playing in a browser tab.
 <p align="center"><sub><b>ZIP picker</b> — untick anything you do not want, then choose where to save &nbsp;·&nbsp; <b>Sequential frames</b> — pair images as start → end for Flow's Frames to video</sub></p>
 
 <p align="center">
-  <img src="docs/screenshots/publish.png" width="300" alt="Publish queue with captions, hashtags and scheduled times">
+  <img src="docs/screenshots/split.png" width="300" alt="Split video with four clips, one unticked">
   &nbsp;
+  <img src="docs/screenshots/publish.png" width="300" alt="Publish queue with captions, hashtags and scheduled times">
+</p>
+<p align="center"><sub><b>Split video</b> &mdash; clips every N seconds; save, zip or send the ones you tick to Flow &nbsp;&middot;&nbsp; <b>Publish queue</b> &mdash; captions from your prompts, suggested hashtags and a posting time per item</sub></p>
+
+<p align="center">
   <img src="docs/screenshots/settings.png" width="300" alt="Settings view">
 </p>
-<p align="center"><sub><b>Publish queue</b> &mdash; captions from your prompts, suggested hashtags and a posting time per item &nbsp;&middot;&nbsp; <b>Settings</b> &mdash; pacing, behaviour and Flow element calibration</sub></p>
+<p align="center"><sub><b>Settings</b> &mdash; pacing, behaviour and Flow element calibration</sub></p>
 
 <sub><i>The panel is shown with placeholder images standing in for real video frames and Flow output.</i></sub>
 
@@ -101,6 +106,41 @@ and says so in the log.
 > FlowBatch does not download videos from YouTube, Instagram, Facebook or Threads. Those platforms prohibit it in their
 > terms, and the Chrome Web Store bans extensions that do it. *Capture tab* records rendered output from your own
 > browser and *From URL* reads direct media links — use them for footage you own or are licensed to use.
+
+## Splitting a video into clips
+
+The **Split video** card cuts the video loaded in *Frame extractor* (a file or a URL) into clips of a
+fixed length — every 5 seconds, say — so each piece can be saved or used in Flow on its own.
+
+1. Load the video in **Frame extractor**. The Split card shows it as its source.
+2. Set **Clip length**, and optionally **Start** / **End** to split only part of it.
+3. Pick **Format** and **Quality**, then press **Split video**.
+4. Each clip appears as it finishes, with a player so you can check it. Untick the ones you don't want.
+5. **⤓ Save** writes the ticked clips to `Downloads/<Base folder>/<Project name>/clips/`,
+   **⤓ ZIP…** packs them into one archive wherever you choose, and **Send to Flow** attaches them to
+   the prompt box in your Flow tab — one at a time, nothing typed or submitted.
+
+**How it works, and what that costs.** A browser extension can't bundle ffmpeg, so Chrome plays the
+source and `MediaRecorder` re-records each segment. That means:
+
+- **It runs in real time.** Splitting 60 seconds of video takes about 60 seconds. The estimate line
+  says how long before you start.
+- **Clips are re-encoded,** not cut losslessly. *High* quality is close to the source; *Small* makes
+  files that are quicker to upload.
+- **Clip lengths are approximate** — within a few tens of milliseconds, because recording starts a
+  moment after playback does.
+- **WebM is the reliable format.** *MP4 if possible* uses MP4 where your Chrome can record it and
+  falls back to WebM otherwise, noting it in the Activity log.
+- **Audio is kept** and routed straight into the recording, so nothing plays through your speakers
+  while it runs.
+
+Cancelling keeps every clip recorded so far, including a partial last one with its real end time.
+
+**About Send to Flow.** Clips go through the same upload path as reference images, now allowed to pick
+a file input that accepts video. Whether Flow uses an uploaded clip depends on the mode it is in —
+several of its video modes take images, not video. FlowBatch reports in the log whether each upload
+was confirmed on the page; if not, Flow likely does not accept video there. Clips over 40 MB are
+refused before sending, since each one travels to the tab in a single message.
 
 ## Publish queue: captions, hashtags and a schedule
 
@@ -218,6 +258,8 @@ IDs. If a step fails (see **Activity log**):
 | `sidepanel/js/frames.js` | Frame extraction: local/URL video seeking, and `tabCapture` of the active tab |
 | `sidepanel/js/zip.js` | ZIP writer (stored entries, ZIP64 when an archive needs it) |
 | `sidepanel/js/zip-ui.js` | The "pick what goes in the ZIP" sheet |
+| `sidepanel/js/split.js` | Video splitting with `MediaRecorder`: clip plan, silent audio routing, per-segment recording |
+| `sidepanel/js/split-ui.js` | Split video card: clip list, save / ZIP / send to Flow |
 | `sidepanel/js/publish-ui.js` | Publish queue: caption templates, schedule plan, batch export |
 | `sidepanel/js/hashtags.js` | Caption summaries and prompt-derived hashtags |
 | `sidepanel/js/results.js` | Shared access to the queue's generated results |

@@ -4,7 +4,7 @@ import { sleep } from './utils.js';
 export const MAX_FRAMES = 1000;
 
 // Recorder-made WebM files often report duration = Infinity until the end is seeked once.
-async function resolveDuration(video) {
+export async function resolveDuration(video) {
   if (Number.isFinite(video.duration)) return video.duration;
   await new Promise((resolve) => {
     const done = () => {
@@ -53,7 +53,7 @@ export function frameTimes(duration, { interval, start, end }) {
   return times;
 }
 
-function seek(video, t) {
+export function seek(video, t) {
   return new Promise((resolve) => {
     let done = false;
     const finish = () => {

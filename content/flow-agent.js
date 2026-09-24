@@ -151,9 +151,10 @@
   }
 
   // ---------- references ----------
+  // A reference shows up as an <img> thumbnail, or a <video> for an uploaded clip.
   function composerThumbCount(composer) {
     const scope = composer || document.body;
-    return $$('img', scope).filter((i) => isShown(i) && !i.closest('[id^="__flowbatch"]')).length;
+    return $$('img, video', scope).filter((i) => isShown(i) && !i.closest('[id^="__flowbatch"]')).length;
   }
 
   async function clearReferences({ selectors }) {
@@ -213,8 +214,11 @@
     return input;
   }
 
+  // Named for its first job; it attaches any media file, and a video/* file looks for an
+  // input that accepts video.
   async function attachImage({ selectors, name, dataUrl, type, slot }) {
     const file = FB.dataUrlToFile(dataUrl, name, type);
+    const kind = /^video\//i.test(file.type) ? 'video' : 'image';
     const box = FB.findPromptBox(selectors);
     if (!box) throw new Error('Prompt box not found on the Flow page');
     const composer = FB.findComposer(box);
@@ -226,18 +230,18 @@
     try {
       let input = slot ? await openFrameSlot(slot, selectors, box, composer) : null;
       slotFound = !!input;
-      if (!input) input = FB.pickFileInput(composer, false);
+      if (!input) input = FB.pickFileInput(composer, false, kind);
       if (!input) {
         const add = FB.findAddButton(selectors, box);
         if (add) {
           realClick(add);
-          input = await waitFor(() => FB.pickFileInput(composer, true), 1500, 150);
+          input = await waitFor(() => FB.pickFileInput(composer, true, kind), 1500, 150);
           if (!input) {
-            const item = FB.findOverlayItem(/upload|from (your )?(computer|device)|browse|choose file|add (an )?image/i) ||
+            const item = FB.findOverlayItem(/upload|from (your )?(computer|device)|browse|choose file|add (an )?(image|video|media)/i) ||
               FB.visibleDialogs().map((d) => FB.findButtonByText(/upload|browse|choose file|from (your )?(computer|device)/i, d)).find(Boolean);
             if (item) {
               realClick(item);
-              input = await waitFor(() => FB.pickFileInput(composer, true), 2000, 150);
+              input = await waitFor(() => FB.pickFileInput(composer, true, kind), 2000, 150);
             }
           }
         }

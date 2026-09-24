@@ -6,7 +6,7 @@ export const app = {
   session: null,
   assets: [], // { id, name, type, blob, order, thumbUrl }
   runner: null,
-  hooks: { assetsChanged: [], promptChanged: [], settingsChanged: [] },
+  hooks: { assetsChanged: [], promptChanged: [], settingsChanged: [], videoChanged: [] },
 };
 
 export const persistSession = () => saveSession(app.session);

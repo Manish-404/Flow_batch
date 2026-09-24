@@ -7,6 +7,7 @@ import { initFrames } from './frames-ui.js';
 import { initSettings, applyTheme } from './settings-ui.js';
 import { initZip, openZipPicker } from './zip-ui.js';
 import { initPublish } from './publish-ui.js';
+import { initSplit } from './split-ui.js';
 import { generatedResults } from './results.js';
 import { Runner } from './runner.js';
 import { findFlowTab, callAgent } from './flow.js';
@@ -402,6 +403,7 @@ async function boot() {
   initAssets();
   initPrompt();
   initFrames();
+  initSplit();
   initPublish();
 
   $('projectName').value = app.session.projectName;

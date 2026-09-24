@@ -1,5 +1,5 @@
 // "Frame extractor" card.
-import { app, on, persistSession } from './app.js';
+import { app, on, emit, persistSession } from './app.js';
 import { addAssets, removeAssets } from './assets-ui.js';
 import { probeVideo, frameTimes, extractVideoFrames, captureTabStream, captureTabFrames, fetchVideoFile, MAX_FRAMES } from './frames.js';
 import { downloadBlob } from './downloads.js';
@@ -14,6 +14,9 @@ let extracted = []; // { id, name, blob, time, assetId, thumbUrl } from the late
 
 const f = () => app.session.frames;
 const isTab = () => f().source === 'tab';
+
+/** The video currently loaded here (file or URL) — the Split video card works on the same one. */
+export const getLoadedVideo = () => (videoFile ? { file: videoFile, info: videoInfo } : null);
 
 function syncSource() {
   const src = f().source;
@@ -74,6 +77,7 @@ async function useVideoFile(file) {
     toast(e.message, 4000);
   }
   updateEstimate();
+  emit('videoChanged');
 }
 
 async function loadFromUrl() {

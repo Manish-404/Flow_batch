@@ -147,6 +147,17 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .zip-tile input { position: absolute; top: 7px; left: 7px; margin: 0; accent-color: var(--accent); width: 16px; height: 16px; }
 .zip-name { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* split video */
+.split-list { display: flex; flex-direction: column; gap: 6px; max-height: 460px; overflow-y: auto; }
+.split-list:empty { display: none; }
+.split-row { display: grid; grid-template-columns: auto 128px 1fr; gap: 8px; align-items: center; border: 1px solid var(--border); background: var(--card-2); border-radius: 10px; padding: 6px 8px; }
+.split-row.off { opacity: 0.45; }
+.split-row video { width: 128px; aspect-ratio: 16/10; object-fit: cover; border-radius: 6px; background: #000; display: block; }
+.split-pick input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+.split-meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; font-size: 12px; color: var(--muted); }
+.split-meta b { color: var(--text); font-size: 13px; }
+#splitSource.warn { color: var(--warn); }
+
 /* publish queue */
 .pub-template { font: 13px/1.5 'Segoe UI', system-ui, sans-serif; resize: vertical; }
 .pub-list { display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow-y: auto; }
