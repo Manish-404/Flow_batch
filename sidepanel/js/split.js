@@ -10,12 +10,40 @@ export const QUALITY = {
   small: 1_500_000,
 };
 
-/** The best container Chrome can record to; MP4 needs a recent Chrome, WebM always works. */
-export function pickMime(prefer) {
-  const mp4 = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4;codecs=avc1', 'video/mp4'];
+/**
+ * The best container Chrome can record to. H.264 + AAC first: it is what Flow and the social
+ * platforms accept most reliably. `strict` refuses to fall back to WebM.
+ */
+export function pickMime(prefer, { strict = false } = {}) {
+  const mp4 = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4;codecs=avc1', 'video/mp4'];
   const webm = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
-  const order = prefer === 'mp4' ? [...mp4, ...webm] : webm;
+  const order = prefer === 'mp4' ? (strict ? mp4 : [...mp4, ...webm]) : webm;
   return order.find((t) => MediaRecorder.isTypeSupported(t)) || '';
+}
+
+// File types Flow's uploader accepts ("PNG, JPG, … MP4, M4V, MOV, 3GP, AVI").
+export const FLOW_VIDEO_TYPES = /^video\/(mp4|x-m4v|quicktime|3gpp|x-msvideo|avi)$/i;
+
+/**
+ * Video bitrate that keeps a clip of `seconds` under `maxBytes`, never above the chosen quality.
+ * 10% of the budget is left for the container and 128 kbps for audio.
+ */
+export function bitrateFor(seconds, maxBytes, quality) {
+  const budget = Math.floor((maxBytes * 8 * 0.9) / Math.max(0.5, seconds)) - 128_000;
+  return Math.max(400_000, Math.min(QUALITY[quality] || QUALITY.high, budget));
+}
+
+/** Re-record a clip as H.264/AAC MP4 no bigger than `maxBytes` — real time, like splitting. */
+export async function toFlowMp4(blob, { seconds, maxBytes, quality, signal, onNote }) {
+  const file = blob instanceof File ? blob : new File([blob], 'clip', { type: blob.type });
+  let out = null;
+  await splitVideo(
+    file,
+    { clipSec: 1e6, start: 0, end: '', format: 'mp4', strictMp4: true, bitrate: bitrateFor(seconds, maxBytes, quality) },
+    { signal, onNote, onClip: async ({ blob: b }) => void (out = b) }
+  );
+  if (!out) throw new Error(signal?.aborted ? 'Cancelled' : 'Conversion produced no video');
+  return out;
 }
 
 export function clipPlan(duration, { clipSec, start, end }) {
@@ -86,8 +114,8 @@ export async function splitVideo(file, opts, { onClip, onProgress, onNote, signa
     const duration = await resolveDuration(video);
     const plan = clipPlan(duration, opts);
     if (!plan.length) throw new Error('Nothing to split — check Start and End');
-    const mime = pickMime(opts.format);
-    if (!mime) throw new Error('This Chrome build cannot record video');
+    const mime = pickMime(opts.format, { strict: !!opts.strictMp4 });
+    if (!mime) throw new Error(opts.strictMp4 ? 'This Chrome cannot record MP4, which Flow requires — update Chrome' : 'This Chrome build cannot record video');
     if (opts.format === 'mp4' && !mime.startsWith('video/mp4')) onNote?.('This Chrome cannot record MP4 — clips will be WebM');
 
     const videoTracks = video.captureStream().getVideoTracks();
@@ -99,7 +127,7 @@ export async function splitVideo(file, opts, { onClip, onProgress, onNote, signa
     }
     stream = new MediaStream([...videoTracks, ...(audio?.tracks || [])]);
     const type = mime.split(';')[0];
-    const bits = QUALITY[opts.quality] || QUALITY.high;
+    const bits = opts.bitrate || QUALITY[opts.quality] || QUALITY.high;
 
     for (let i = 0; i < plan.length; i++) {
       if (signal?.aborted) break;

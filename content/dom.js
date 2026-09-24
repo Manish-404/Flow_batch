@@ -478,19 +478,44 @@
 
   FB.scanFailures = () => scanText(FAIL_TEXT, 220);
 
+  // Upload rejections, e.g. "Unsupported file type: clip_004.webm (supported extensions are …)".
+  const UPLOAD_FAIL =
+    /(unsupported file|file type|not supported|too large|too big|exceeds|maximum (file )?size|upload(ing)? failed|failed to upload|couldn['’]t upload|could not upload|unable to upload)/i;
+
+  /** Every visible text node matching `re` (scanText only counts them). */
+  FB.collectText = (re, maxLen = 300) => {
+    const out = [];
+    if (!document.body) return out;
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const t = norm(node.nodeValue);
+      if (!t || t.length > maxLen || !re.test(t)) continue;
+      const p = node.parentElement;
+      if (!p || p.closest('script, style, noscript, ' + OWN) || !isShown(p)) continue;
+      const block = norm(p.closest('[role="alert"], [role="status"], p, li, div')?.innerText || t);
+      out.push(block.length <= maxLen ? block : t);
+    }
+    return [...new Set(out)];
+  };
+  FB.scanUploadErrors = () => FB.collectText(UPLOAD_FAIL);
+
   // Toasts can vanish between polls, so record them as they appear.
   FB.failureEvents = [];
+  FB.uploadErrors = [];
   const LIVE = '[role="alert"], [role="status"], [role="alertdialog"], [aria-live], [class*="toast" i], [class*="snackbar" i]';
+  const remember = (list, text) => {
+    list.push({ t: Date.now(), text });
+    if (list.length > 50) list.shift();
+  };
   const observer = new MutationObserver((muts) => {
     for (const m of muts) {
       for (const node of m.addedNodes) {
         const el = node.nodeType === 1 ? node : node.parentElement;
         if (!el || isOwn(el) || !el.closest(LIVE)) continue;
         const t = norm(node.textContent);
-        if (t && t.length < 300 && FAIL_TEXT.test(t)) {
-          FB.failureEvents.push({ t: Date.now(), text: t });
-          if (FB.failureEvents.length > 50) FB.failureEvents.shift();
-        }
+        if (!t || t.length >= 300) continue;
+        if (FAIL_TEXT.test(t)) remember(FB.failureEvents, t);
+        if (UPLOAD_FAIL.test(t)) remember(FB.uploadErrors, t);
       }
     }
   });

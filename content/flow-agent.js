@@ -214,6 +214,29 @@
     return input;
   }
 
+  /**
+   * Flow's file input for this kind of media: one already on the page, or the one its add
+   * button opens (page-hook.js parks it instead of showing the OS picker). Call with
+   * data-flowbatch-capture set.
+   */
+  async function findUploadInput(selectors, box, composer, kind) {
+    let input = FB.pickFileInput(composer, false, kind);
+    if (input) return input;
+    const add = FB.findAddButton(selectors, box);
+    if (!add) return null;
+    realClick(add);
+    input = await waitFor(() => FB.pickFileInput(composer, true, kind), 1500, 150);
+    if (input) return input;
+    const item =
+      FB.findOverlayItem(/upload|from (your )?(computer|device)|browse|choose file|add (an )?(image|video|media)/i) ||
+      FB.visibleDialogs()
+        .map((d) => FB.findButtonByText(/upload|browse|choose file|from (your )?(computer|device)/i, d))
+        .find(Boolean);
+    if (!item) return null;
+    realClick(item);
+    return waitFor(() => FB.pickFileInput(composer, true, kind), 2000, 150);
+  }
+
   // Named for its first job; it attaches any media file, and a video/* file looks for an
   // input that accepts video.
   async function attachImage({ selectors, name, dataUrl, type, slot }) {
@@ -230,22 +253,7 @@
     try {
       let input = slot ? await openFrameSlot(slot, selectors, box, composer) : null;
       slotFound = !!input;
-      if (!input) input = FB.pickFileInput(composer, false, kind);
-      if (!input) {
-        const add = FB.findAddButton(selectors, box);
-        if (add) {
-          realClick(add);
-          input = await waitFor(() => FB.pickFileInput(composer, true, kind), 1500, 150);
-          if (!input) {
-            const item = FB.findOverlayItem(/upload|from (your )?(computer|device)|browse|choose file|add (an )?(image|video|media)/i) ||
-              FB.visibleDialogs().map((d) => FB.findButtonByText(/upload|browse|choose file|from (your )?(computer|device)/i, d)).find(Boolean);
-            if (item) {
-              realClick(item);
-              input = await waitFor(() => FB.pickFileInput(composer, true, kind), 2000, 150);
-            }
-          }
-        }
-      }
+      if (!input) input = await findUploadInput(selectors, box, composer, kind);
       if (input) {
         FB.setInputFiles(input, [file]);
         method = 'file-input';
@@ -280,6 +288,112 @@
     if ($$('[role="menu"], [role="listbox"]').some(isShown)) FB.pressKey(document.body, 'Escape');
     const dialogs = FB.visibleDialogs().map((d) => norm(d.innerText).slice(0, 140));
     return { method, confirmed: !!confirmed, slotFound, dialogClicks, openDialogs: dialogs };
+  }
+
+  // ---------- batch uploads ----------
+  // A video is too big for one extension message, so the panel sends it in base64 chunks,
+  // each decoded here as it arrives and assembled into a File when the batch is attached.
+  const staged = new Map(); // key -> { name, type, parts: (Uint8Array|null)[] }
+
+  function stageChunk({ key, index, total, data, name, type }) {
+    let s = staged.get(key);
+    if (!s) staged.set(key, (s = { name, type, parts: Array.from({ length: total }, () => null) }));
+    const bin = atob(data);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    s.parts[index] = bytes;
+    return { received: s.parts.filter(Boolean).length, total };
+  }
+
+  function takeStaged(key) {
+    const s = staged.get(key);
+    if (!s) throw new Error('Upload data went missing — the Flow tab may have reloaded; send again');
+    staged.delete(key);
+    if (s.parts.some((p) => !p)) throw new Error(`Upload data for ${s.name} arrived incomplete; send again`);
+    return new File(s.parts, s.name, { type: s.type });
+  }
+
+  /**
+   * Hand every staged file to Flow in one go — all at once when its input takes `multiple`,
+   * otherwise back to back — then watch the page until each one has either shown up or been
+   * rejected by name (e.g. "Unsupported file type: clip_004.webm").
+   */
+  async function attachFiles({ selectors, keys, settleMs = 60000 }) {
+    const files = keys.map(takeStaged);
+    const box = FB.findPromptBox(selectors);
+    if (!box) throw new Error('Prompt box not found on the Flow page');
+    const composer = FB.findComposer(box);
+    const kind = files.every((f) => /^video\//i.test(f.type)) ? 'video' : 'image';
+    const before = composerThumbCount(composer);
+    const since = Date.now();
+    // Text already on the page (help copy listing file types, old toasts) is not a new error.
+    const baseline = new Set(FB.scanUploadErrors());
+    const root = document.documentElement;
+    root.dataset.flowbatchCapture = '1';
+    let method;
+    try {
+      let input = await findUploadInput(selectors, box, composer, kind);
+      if (input && (input.multiple || files.length === 1)) {
+        FB.setInputFiles(input, files);
+        method = files.length > 1 ? 'file input, all at once' : 'file input';
+      } else if (input) {
+        for (const [i, f] of files.entries()) {
+          if (i) {
+            await sleep(1200);
+            input = (await findUploadInput(selectors, box, composer, kind)) || input;
+          }
+          FB.setInputFiles(input, [f]);
+        }
+        method = 'file input, one after another (Flow takes one file per pick)';
+      } else {
+        FB.pasteFiles(box, files);
+        method = 'paste';
+      }
+    } finally {
+      delete root.dataset.flowbatchCapture;
+    }
+
+    await sleep(1200);
+    const dialogClicks = await confirmUploadDialogs();
+
+    const newErrors = () => [
+      ...new Set([
+        ...FB.uploadErrors.filter((e) => e.t >= since).map((e) => e.text),
+        ...FB.scanUploadErrors().filter((t) => !baseline.has(t)),
+      ]),
+    ];
+    const errorFor = (errs, f) => errs.find((t) => t.toLowerCase().includes(f.name.toLowerCase())) || null;
+
+    let added = 0;
+    let errs = [];
+    const deadline = Date.now() + settleMs;
+    for (;;) {
+      await sleep(600);
+      const c = FB.findComposer(FB.findPromptBox(selectors));
+      added = Math.max(0, composerThumbCount(c) - before);
+      errs = newErrors();
+      const rejected = files.filter((f) => errorFor(errs, f)).length;
+      const busy = !!c && $$('[role="progressbar"], mat-spinner, mat-progress-spinner', c).some(isShown);
+      if (added + rejected >= files.length && !busy) break;
+      if (Date.now() > deadline) break;
+    }
+    if ($$('[role="menu"], [role="listbox"]').some(isShown)) FB.pressKey(document.body, 'Escape');
+
+    const named = new Set();
+    const results = files.map((f) => {
+      const error = errorFor(errs, f);
+      if (error) named.add(error);
+      return { name: f.name, size: f.size, error };
+    });
+    return {
+      method,
+      expected: files.length,
+      added,
+      files: results,
+      otherErrors: errs.filter((t) => !named.has(t)),
+      dialogClicks,
+      openDialogs: FB.visibleDialogs().map((d) => norm(d.innerText).slice(0, 140)),
+    };
   }
 
   // ---------- prompt / submit / poll ----------
@@ -396,6 +510,12 @@
     applySettings,
     clearReferences,
     attachImage,
+    stageChunk,
+    attachFiles,
+    dropStaged: ({ keys }) => {
+      (keys || []).forEach((k) => staged.delete(k));
+      return { dropped: true };
+    },
 
     setPrompt: async ({ selectors, text }) => {
       const box = FB.findPromptBox(selectors);

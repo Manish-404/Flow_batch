@@ -1,5 +1,5 @@
 // Finding the Google Flow tab and talking to the content-script agent inside it.
-import { sleep } from './utils.js';
+import { sleep, blobToDataUrl } from './utils.js';
 
 export function isFlowUrl(url) {
   return /^https:\/\/([a-z0-9-]+\.)?flow\.google\.com\//i.test(url || '') || /^https:\/\/labs\.google\/fx\//i.test(url || '');
@@ -89,4 +89,35 @@ export async function callAgent(tabId, action, payload = {}, { timeoutMs = 12000
     }
   }
   throw lastErr;
+}
+
+// Bytes per message. As base64 that is ~8 MB, well inside the extension messaging limit.
+const CHUNK_BYTES = 6 * 1024 * 1024;
+
+/**
+ * Stream files into the Flow tab in chunks, ready for the agent's `attachFiles`.
+ * files: [{ blob, name, type }] — returns one key per file, in order.
+ */
+export async function stageFiles(tabId, files, { onProgress, signal } = {}) {
+  const total = files.reduce((n, f) => n + f.blob.size, 0) || 1;
+  const keys = [];
+  let sent = 0;
+  for (const f of files) {
+    const key = crypto.randomUUID();
+    keys.push(key);
+    const parts = Math.max(1, Math.ceil(f.blob.size / CHUNK_BYTES));
+    for (let i = 0; i < parts; i++) {
+      if (signal?.aborted) {
+        await callAgent(tabId, 'dropStaged', { keys }, { timeoutMs: 10000, retries: 0 }).catch(() => {});
+        throw new Error('Cancelled');
+      }
+      const slice = f.blob.slice(i * CHUNK_BYTES, (i + 1) * CHUNK_BYTES);
+      const data = (await blobToDataUrl(slice)).split(',')[1] || '';
+      // Staging a chunk is idempotent, so a retry after a dropped connection is safe.
+      await callAgent(tabId, 'stageChunk', { key, index: i, total: parts, data, name: f.name, type: f.type }, { timeoutMs: 60000, retries: 1 });
+      sent += slice.size;
+      onProgress?.(sent / total, sent, total);
+    }
+  }
+  return keys;
 }

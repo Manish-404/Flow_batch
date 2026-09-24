@@ -27,7 +27,7 @@ export const DEFAULT_SESSION = {
   count: 1,
   seqFrames: false,
   queue: [],
-  split: { clipSec: 5, start: 0, end: '', prefix: 'clip_', format: 'webm', quality: 'high', toDownloads: false },
+  split: { clipSec: 5, start: 0, end: '', prefix: 'clip_', format: 'mp4', quality: 'high', toDownloads: false, v: 2 },
   publish: {
     source: 'results',
     platforms: { ig: true, fb: true, yt: false },
@@ -87,6 +87,9 @@ export async function loadSession() {
   const merged = { ...clone(DEFAULT_SESSION), ...(session || {}) };
   merged.frames = { ...DEFAULT_SESSION.frames, ...(session?.frames || {}) };
   merged.split = { ...DEFAULT_SESSION.split, ...(session?.split || {}) };
+  // Clips used to default to WebM, which Flow rejects. Move sessions saved before v2 to MP4 once;
+  // a WebM choice made after that sticks.
+  if (session?.split && !session.split.v) merged.split = { ...merged.split, format: 'mp4', v: 2 };
   merged.publish = { ...DEFAULT_SESSION.publish, ...(session?.publish || {}) };
   merged.publish.platforms = { ...DEFAULT_SESSION.publish.platforms, ...(session?.publish?.platforms || {}) };
   // A queue item left "running" by a closed panel is pending again.

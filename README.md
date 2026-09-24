@@ -117,8 +117,8 @@ fixed length — every 5 seconds, say — so each piece can be saved or used in 
 3. Pick **Format** and **Quality**, then press **Split video**.
 4. Each clip appears as it finishes, with a player so you can check it. Untick the ones you don't want.
 5. **⤓ Save** writes the ticked clips to `Downloads/<Base folder>/<Project name>/clips/`,
-   **⤓ ZIP…** packs them into one archive wherever you choose, and **Send to Flow** attaches them to
-   the prompt box in your Flow tab — one at a time, nothing typed or submitted.
+   **⤓ ZIP…** packs them into one archive wherever you choose, and **Send to Flow** attaches all the
+   ticked clips to the prompt box in your Flow tab in one batch — nothing typed or submitted.
 
 **How it works, and what that costs.** A browser extension can't bundle ffmpeg, so Chrome plays the
 source and `MediaRecorder` re-records each segment. That means:
@@ -129,18 +129,35 @@ source and `MediaRecorder` re-records each segment. That means:
   files that are quicker to upload.
 - **Clip lengths are approximate** — within a few tens of milliseconds, because recording starts a
   moment after playback does.
-- **WebM is the reliable format.** *MP4 if possible* uses MP4 where your Chrome can record it and
-  falls back to WebM otherwise, noting it in the Activity log.
+- **MP4 is the default,** recorded as H.264 video with AAC audio — the combination Flow and the social
+  platforms accept. *WebM* is still available; Flow rejects it, so WebM clips are converted when sent.
 - **Audio is kept** and routed straight into the recording, so nothing plays through your speakers
   while it runs.
 
 Cancelling keeps every clip recorded so far, including a partial last one with its real end time.
 
-**About Send to Flow.** Clips go through the same upload path as reference images, now allowed to pick
-a file input that accepts video. Whether Flow uses an uploaded clip depends on the mode it is in —
-several of its video modes take images, not video. FlowBatch reports in the log whether each upload
-was confirmed on the page; if not, Flow likely does not accept video there. Clips over 40 MB are
-refused before sending, since each one travels to the tab in a single message.
+### Sending clips to Flow
+
+Flow accepts `MP4, M4V, MOV, 3GP, AVI` — not WebM. **Send to Flow** makes sure every ticked clip is
+something Flow will take, sends them together, and checks what happened to each one:
+
+1. **Convert what Flow can't take.** A WebM clip, or an MP4 over 40 MB, is re-encoded to H.264/AAC MP4
+   sized to stay under 25 MB, so it uploads quickly. This runs in real time, like splitting, and the
+   confirmation dialog says how long it will take. A converted copy is kept, so sending again is
+   instant.
+2. **Stream them into the Flow tab** in 6 MB chunks. One extension message can't carry a large video;
+   chunks can, and they arrive byte-for-byte intact.
+3. **Attach them in one batch.** If Flow's file input takes several files, they all go in a single
+   pick; if it takes one, they are handed over back to back.
+4. **Check each one.** FlowBatch watches the page until every clip has either appeared in the prompt
+   box or been rejected *by name* — Flow's errors quote the file, e.g. `Unsupported file type:
+   clip_004.webm`. Each clip row then shows **In Flow ✓**, the rejection, or *not seen on the page yet*
+   if Flow was still processing when the wait ran out.
+
+Whether Flow *uses* an uploaded clip still depends on its mode: several of its video modes take images,
+not video.
+
+
 
 ## Publish queue: captions, hashtags and a schedule
 
