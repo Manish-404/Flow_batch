@@ -31,3 +31,6 @@ desktop.ini
 tmp/
 temp/
 *.log
+
+# Private project notes (conversations, decisions, plans) — kept locally, never pushed
+claude-notes/

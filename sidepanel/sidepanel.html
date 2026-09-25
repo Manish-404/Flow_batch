@@ -15,6 +15,10 @@
           <svg viewBox="0 0 24 24" width="20" height="20"><path fill="none" stroke="currentColor" stroke-width="1.8" d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path fill="none" stroke="currentColor" stroke-width="1.8" d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
         </button>
       </div>
+      <div class="seg seg-sm site-seg" role="tablist" aria-label="Where to generate">
+        <button class="seg-btn active" data-site="flow" title="Run the queue in Google Flow">Google Flow</button>
+        <button class="seg-btn" data-site="gemini" title="Run the queue in Gemini (gemini.google.com)">Gemini</button>
+      </div>
       <div class="conn-row">
         <span id="connPill" class="pill"><span class="dot"></span><span id="connText">Checking Flow tab…</span></span>
         <button id="btnOpenFlow" class="link-btn">Open Flow</button>
@@ -168,7 +172,7 @@
         <div class="row between">
           <div class="row">
             <button id="btnPerAsset" class="btn btn-ghost btn-sm" title="Use the first prompt as a template and create one prompt per asset">⚡ One prompt per asset</button>
-            <button id="btnPerPair" class="btn btn-ghost btn-sm" data-video-mode hidden title="Use the first prompt as a template and create one prompt per start → end pair">🎬 One prompt per frame pair</button>
+            <button id="btnPerPair" class="btn btn-ghost btn-sm" data-video-mode data-flow-only hidden title="Use the first prompt as a template and create one prompt per start → end pair">🎬 One prompt per frame pair</button>
           </div>
           <span id="promptWarn" class="warn small"></span>
         </div>
@@ -188,18 +192,22 @@
             <div class="field"><span class="label">Aspect ratio</span><div id="aspectSelect" class="cselect"></div></div>
             <div class="field"><span class="label">Model</span><div id="modelSelect" class="cselect"></div></div>
           </div>
-          <div class="seg count-seg" id="countSeg">
+          <div class="seg count-seg" id="countSeg" data-flow-only>
             <button class="seg-btn active" data-count="1">x1</button>
             <button class="seg-btn" data-count="2">x2</button>
             <button class="seg-btn" data-count="3">x3</button>
             <button class="seg-btn" data-count="4">x4</button>
           </div>
-          <div class="checks" data-video-mode hidden>
+          <div class="checks" data-video-mode data-flow-only hidden>
             <label class="check"><input id="seqFrames" type="checkbox" /> Sequential frames — pair images as start → end</label>
           </div>
-          <p class="muted small" data-video-mode hidden>
+          <p class="muted small" data-video-mode data-flow-only hidden>
             Each scene uses two images: 1→2, 3→4, 5→6… With an odd number of images the last one
             can't be paired, so that single scene is generated with <b>Ingredients to video</b> instead.
+          </p>
+          <p class="muted small" data-gemini-only hidden>
+            Gemini makes one result per prompt, in a new chat each time (Settings → Automation).
+            It has no ratio control, so a chosen ratio is added to the prompt as text.
           </p>
         </div>
       </section>
@@ -330,6 +338,7 @@
         <label class="field"><span class="label">Prompt separator</span><input id="setSeparator" class="input input-lg" spellcheck="false" /></label>
         <p class="muted small">Used by the + button and prompt splitting. The @ character is reserved for mentions.</p>
         <label class="field"><span class="label">Flow URL</span><input id="setFlowUrl" class="input" spellcheck="false" /></label>
+        <label class="field"><span class="label">Gemini URL</span><input id="setGeminiUrl" class="input" spellcheck="false" /></label>
       </section>
 
       <section class="card">
@@ -342,12 +351,13 @@
         </div>
         <div class="toggles">
           <label class="toggle"><input type="checkbox" data-setting="autoDownload" /><span></span>Auto-download each result</label>
-          <label class="toggle"><input type="checkbox" data-setting="applyFlowSettings" /><span></span>Apply mode / ratio / model / count in Flow before running</label>
+          <label class="toggle"><input type="checkbox" data-setting="applyFlowSettings" /><span></span>Apply mode / ratio / model / count in Flow (tool and model in Gemini) before running</label>
           <label class="toggle"><input type="checkbox" data-setting="clearReferences" /><span></span>Remove previous reference images before each prompt</label>
           <label class="toggle"><input type="checkbox" data-setting="autoNewProject" /><span></span>Create a Flow project automatically if none is open</label>
+          <label class="toggle"><input type="checkbox" data-setting="geminiNewChat" /><span></span>Start a new Gemini chat for each prompt</label>
           <label class="toggle"><input type="checkbox" data-setting="stopOnFailure" /><span></span>Stop the queue after 3 failures in a row</label>
         </div>
-        <label class="field"><span class="label">@mention text sent to Flow</span>
+        <label class="field"><span class="label">@mention text sent to Flow / Gemini</span>
           <select id="setMentionMode" class="input">
             <option value="remove">Remove it (“this @f_006 image” → “this image”)</option>
             <option value="keep">Keep the name (“this f_006 image”)</option>
@@ -357,8 +367,8 @@
       </section>
 
       <section class="card">
-        <div class="card-head"><h2 class="dot-title">Flow elements</h2><span class="muted small">Advanced · fix detection</span></div>
-        <p class="muted small">FlowBatch finds these automatically. If Flow’s layout changes and a step fails, open a Flow project, press <b>Pick</b> and click the element on the page.</p>
+        <div class="card-head"><h2 class="dot-title" id="elementsTitle">Flow elements</h2><span class="muted small">Advanced · fix detection</span></div>
+        <p class="muted small" id="elementsHelp">FlowBatch finds these automatically. If Flow’s layout changes and a step fails, open a Flow project, press <b>Pick</b> and click the element on the page.</p>
         <div id="selectorRows" class="selector-rows"></div>
         <button id="btnDiagnose" class="btn btn-ghost btn-block">Diagnose current Flow tab</button>
         <pre id="diagOutput" class="diag" hidden></pre>

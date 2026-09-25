@@ -1,27 +1,31 @@
 // "Split video" card: cut the video loaded in Frame extractor into clips every N seconds,
-// then save the ones you want, zip them, or send them to Flow as references.
+// then save the ones you want, zip them, or send them to Flow or Gemini as references.
 import { app, on, persistSession } from './app.js';
 import { getLoadedVideo } from './frames-ui.js';
 import { splitVideo, clipPlan, pickMime, toFlowMp4, FLOW_VIDEO_TYPES, MAX_CLIPS } from './split.js';
 import { downloadBlob } from './downloads.js';
 import { openZipPicker } from './zip-ui.js';
-import { findFlowTab, callAgent, stageFiles } from './flow.js';
+import { SITES, findSiteTab, callAgent, stageFiles } from './site.js';
 import { $, el, pad, extFromMime, fmtBytes, fmtDuration, sanitizeSegment, log, toast } from './utils.js';
 
 // Clips Flow can take (MP4) up to this size go as they are; anything else is re-encoded first.
+// Gemini gets the same MP4 copies.
 const FLOW_MAX_BYTES = 40 * 1024 * 1024;
 // Size budget for a re-encoded copy — small enough to upload quickly.
 const FLOW_TARGET_BYTES = 25 * 1024 * 1024;
+// Gemini takes at most this many files in one message.
+const GEMINI_MAX_FILES = 10;
 
 let clips = []; // { id, name, start, end, blob, url, include, flowBlob?, flow? }
 let controller = null; // splitting
-let sender = null; // sending to Flow
+let sender = null; // sending to Flow / Gemini
 
 const s = () => app.session.split;
 const folder = () => `${sanitizeSegment(app.settings.baseFolder, 'FlowBatch')}/${sanitizeSegment(app.session.projectName, 'Untitled')}/clips`;
 const selected = () => clips.filter((c) => c.include);
 const busy = () => !!controller || !!sender;
 const flowReady = (b) => FLOW_VIDEO_TYPES.test(b.type) && b.size <= FLOW_MAX_BYTES;
+const target = () => (app.session.site === 'gemini' ? 'gemini' : 'flow');
 
 function setBar(p) {
   $('splitProgressWrap').hidden = p == null;
@@ -50,7 +54,7 @@ function updateEstimate() {
   $('splitEstimate').textContent = plan.length
     ? `≈ ${plan.length} clip${plan.length === 1 ? '' : 's'} of ${Number(s().clipSec) || 5}s · ${mp4 ? 'MP4' : 'WebM'} · takes about ${fmtDuration(secs * 1000)}` +
       (plan.length >= MAX_CLIPS ? ` (capped at ${MAX_CLIPS})` : '') +
-      (mp4 ? '' : ' · Flow only takes MP4, so WebM clips are converted when you send them')
+      (mp4 ? '' : ' · WebM clips are converted to MP4 when you send them to Flow or Gemini')
     : 'Nothing to split — check Start and End.';
 }
 
@@ -166,11 +170,11 @@ function zipSelected() {
   });
 }
 
-/** A copy of the clip that Flow will take: MP4, and small enough to upload quickly. */
+/** A copy of the clip that Flow (and Gemini) will take: MP4, and small enough to upload quickly. */
 async function forFlow(c, signal) {
   if (flowReady(c.blob)) return c.blob;
   if (c.flowBlob && flowReady(c.flowBlob)) return c.flowBlob;
-  const why = FLOW_VIDEO_TYPES.test(c.blob.type) ? `${fmtBytes(c.blob.size)} is over ${fmtBytes(FLOW_MAX_BYTES)}` : 'Flow does not accept WebM';
+  const why = FLOW_VIDEO_TYPES.test(c.blob.type) ? `${fmtBytes(c.blob.size)} is over ${fmtBytes(FLOW_MAX_BYTES)}` : 'Flow does not accept WebM, and MP4 suits Gemini too';
   log(`${c.name}: re-encoding to MP4 (${why})`);
   const out = await toFlowMp4(c.blob, {
     seconds: Math.max(0.5, c.end - c.start),
@@ -185,19 +189,25 @@ async function forFlow(c, signal) {
 }
 
 /**
- * Send every selected clip to Flow's prompt box in one batch: convert what Flow can't take,
- * stream the files into the tab, attach them together, then report per clip whether Flow
- * showed it or rejected it by name. Nothing is typed or submitted.
+ * Send every selected clip to the prompt box of the Flow or Gemini tab in one batch: convert
+ * what Flow can't take, stream the files into the tab, attach them together, then report per
+ * clip whether the site showed it or rejected it by name. Nothing is typed or submitted.
  */
-async function sendToFlow() {
+async function sendToSite() {
   const chosen = selected();
   if (!chosen.length) return;
+  const site = target();
+  const { name } = SITES[site];
+  if (site === 'gemini' && chosen.length > GEMINI_MAX_FILES) {
+    toast(`Gemini takes up to ${GEMINI_MAX_FILES} files per message — tick ${GEMINI_MAX_FILES} or fewer clips`, 5000);
+    return;
+  }
   const needConvert = chosen.filter((c) => !flowReady(c.blob) && !(c.flowBlob && flowReady(c.flowBlob)));
   const convertSecs = needConvert.reduce((n, c) => n + (c.end - c.start), 0);
   const plan = needConvert.length
-    ? `\n\n${needConvert.length} of them will be converted to MP4 first (about ${fmtDuration(convertSecs * 1000)}) — Flow does not accept WebM or files over ${fmtBytes(FLOW_MAX_BYTES)}.`
+    ? `\n\n${needConvert.length} of them will be converted to MP4 first (about ${fmtDuration(convertSecs * 1000)}) — WebM or files over ${fmtBytes(FLOW_MAX_BYTES)} are re-encoded.`
     : '';
-  if (!confirm(`Attach ${chosen.length} clip(s) to the prompt box in your Flow tab? Nothing will be submitted.${plan}`)) return;
+  if (!confirm(`Attach ${chosen.length} clip(s) to the prompt box in your ${name} tab? Nothing will be submitted.${plan}`)) return;
 
   sender = new AbortController();
   const signal = sender.signal;
@@ -222,23 +232,23 @@ async function sendToFlow() {
     }
     renderClips();
 
-    // 2. Stream them into the Flow tab.
-    tab = await findFlowTab({ open: true, flowUrl: app.settings.flowUrl });
+    // 2. Stream them into the tab.
+    tab = await findSiteTab(site, { open: true, settings: app.settings });
     await chrome.tabs.update(tab.id, { active: true });
-    const selectors = app.settings.selectors;
+    const selectors = SITES[site].selectors(app.settings);
     await callAgent(tab.id, 'waitReady', { selectors, timeoutMs: 30000 }, { timeoutMs: 40000 });
     keys = await stageFiles(tab.id, files, {
       signal,
       onProgress: (p, sent, total) => {
         setBar(p);
-        $('splitStatus').textContent = `Sending to Flow · ${fmtBytes(sent)} / ${fmtBytes(total)}`;
+        $('splitStatus').textContent = `Sending to ${name} · ${fmtBytes(sent)} / ${fmtBytes(total)}`;
       },
     });
 
-    // 3. Attach them together and wait for Flow's verdict on each.
+    // 3. Attach them together and wait for the site's verdict on each.
     const totalMB = files.reduce((n, f) => n + f.blob.size, 0) / 1048576;
     const settleMs = Math.min(300000, 45000 + totalMB * 2000);
-    $('splitStatus').textContent = `Waiting for Flow to accept ${files.length} clip${files.length === 1 ? '' : 's'}…`;
+    $('splitStatus').textContent = `Waiting for ${name} to accept ${files.length} clip${files.length === 1 ? '' : 's'}…`;
     setBar(1);
     const r = await callAgent(tab.id, 'attachFiles', { selectors, keys, settleMs }, { timeoutMs: settleMs + 60000, retries: 0 });
     keys = null; // consumed by the tab
@@ -247,26 +257,26 @@ async function sendToFlow() {
     const allShown = r.added >= r.expected - rejected;
     r.files.forEach((f, i) => {
       const c = chosen[i];
-      if (f.error) c.flow = { state: 'error', text: `Flow rejected it: ${f.error}` };
-      else if (allShown) c.flow = { state: 'ok', text: 'In Flow ✓' };
+      if (f.error) c.flow = { state: 'error', text: `${name} rejected it: ${f.error}` };
+      else if (allShown) c.flow = { state: 'ok', text: `In ${name} ✓` };
       else c.flow = { state: 'unconfirmed', text: 'Sent — not seen on the page yet' };
     });
     const ok = chosen.filter((c) => c.flow?.state === 'ok').length;
-    log(`Flow: ${r.method} · ${ok}/${r.expected} confirmed, ${rejected} rejected, ${r.added} new on the page`, rejected || ok < r.expected ? 'warn' : 'ok');
-    r.files.filter((f) => f.error).forEach((f) => log(`Flow rejected ${f.name}: ${f.error}`, 'error'));
-    r.otherErrors.forEach((t) => log(`Flow message: ${t}`, 'warn'));
-    if (r.openDialogs?.length) log(`Flow dialog still open: ${r.openDialogs.join(' | ')}`, 'warn');
+    log(`${name}: ${r.method} · ${ok}/${r.expected} confirmed, ${rejected} rejected, ${r.added} new on the page`, rejected || ok < r.expected ? 'warn' : 'ok');
+    r.files.filter((f) => f.error).forEach((f) => log(`${name} rejected ${f.name}: ${f.error}`, 'error'));
+    r.otherErrors.forEach((t) => log(`${name} message: ${t}`, 'warn'));
+    if (r.openDialogs?.length) log(`${name} dialog still open: ${r.openDialogs.join(' | ')}`, 'warn');
     toast(
       ok === chosen.length
-        ? `All ${ok} clip${ok === 1 ? '' : 's'} are in Flow`
+        ? `All ${ok} clip${ok === 1 ? '' : 's'} are in ${name}`
         : rejected
-          ? `${rejected} clip(s) rejected by Flow — see the Activity log`
-          : `${ok} of ${chosen.length} confirmed — Flow may still be processing; check the tab`,
+          ? `${rejected} clip(s) rejected by ${name} — see the Activity log`
+          : `${ok} of ${chosen.length} confirmed — ${name} may still be processing; check the tab`,
       6000
     );
   } catch (e) {
     const cancelled = /cancel/i.test(e.message);
-    log(cancelled ? 'Send to Flow cancelled' : `Send to Flow failed: ${e.message}`, cancelled ? 'warn' : 'error');
+    log(cancelled ? `Send to ${name} cancelled` : `Send to ${name} failed: ${e.message}`, cancelled ? 'warn' : 'error');
     toast(cancelled ? 'Cancelled' : e.message, 5000);
     if (keys && tab) callAgent(tab.id, 'dropStaged', { keys }, { timeoutMs: 10000, retries: 0 }).catch(() => {});
   } finally {
@@ -320,8 +330,16 @@ export function initSplit() {
   });
   $('btnSplitSave').addEventListener('click', saveSelected);
   $('btnSplitZip').addEventListener('click', zipSelected);
-  $('btnSplitToFlow').addEventListener('click', sendToFlow);
+  $('btnSplitToFlow').addEventListener('click', sendToSite);
   on('videoChanged', renderSource);
+  on('siteChanged', renderSendButton);
+  renderSendButton();
   renderSource();
   renderClips();
+}
+
+function renderSendButton() {
+  const { name } = SITES[target()];
+  $('btnSplitToFlow').textContent = `Send to ${name}`;
+  $('btnSplitToFlow').title = `Attach the selected clips to ${name}'s prompt box`;
 }

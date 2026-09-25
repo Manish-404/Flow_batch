@@ -1,18 +1,32 @@
-// Settings view: storage, pacing, behaviour toggles, theme, and Flow element calibration.
-import { app, persistSettings } from './app.js';
+// Settings view: storage, pacing, behaviour toggles, theme, and Flow / Gemini element calibration.
+import { app, on, persistSettings } from './app.js';
 import { defaultSettings } from './store.js';
 import { makeStepper } from './controls.js';
-import { findFlowTab, callAgent } from './flow.js';
+import { SITES, findSiteTab, callAgent } from './site.js';
 import { $, el, toast, log } from './utils.js';
 
-const SELECTOR_KEYS = [
-  { key: 'promptBox', label: 'Prompt box', hint: 'prompt box' },
-  { key: 'submitButton', label: 'Submit / Create button', hint: 'submit (create) button' },
-  { key: 'addImageButton', label: 'Add image button', hint: 'add-image (+) button' },
-  { key: 'settingsButton', label: 'Generation settings button', hint: 'settings (tune) button' },
-  { key: 'startFrameSlot', label: 'Start frame slot (video)', hint: 'start-frame upload slot' },
-  { key: 'endFrameSlot', label: 'End frame slot (video)', hint: 'end-frame upload slot' },
-];
+// The page elements each site's agent looks for; any of them can be pinned to a CSS selector.
+const SELECTOR_KEYS = {
+  flow: [
+    { key: 'promptBox', label: 'Prompt box', hint: 'prompt box' },
+    { key: 'submitButton', label: 'Submit / Create button', hint: 'submit (create) button' },
+    { key: 'addImageButton', label: 'Add image button', hint: 'add-image (+) button' },
+    { key: 'settingsButton', label: 'Generation settings button', hint: 'settings (tune) button' },
+    { key: 'startFrameSlot', label: 'Start frame slot (video)', hint: 'start-frame upload slot' },
+    { key: 'endFrameSlot', label: 'End frame slot (video)', hint: 'end-frame upload slot' },
+  ],
+  gemini: [
+    { key: 'promptBox', label: 'Prompt box', hint: 'prompt box' },
+    { key: 'submitButton', label: 'Send button', hint: 'send button' },
+    { key: 'addImageButton', label: 'Upload (+) button', hint: 'upload (+) button' },
+    { key: 'toolsButton', label: 'Tools button', hint: 'Tools button' },
+    { key: 'modelButton', label: 'Model picker', hint: 'model picker (Fast / Thinking / Pro)' },
+    { key: 'newChatButton', label: 'New chat button', hint: 'New chat button' },
+  ],
+};
+
+const site = () => (app.session?.site === 'gemini' ? 'gemini' : 'flow');
+const siteSelectors = () => SITES[site()].selectors(app.settings);
 
 const steppers = {};
 
@@ -21,30 +35,43 @@ export function applyTheme() {
   document.querySelectorAll('[data-theme-set]').forEach((b) => b.classList.toggle('active', b.dataset.themeSet === app.settings.theme));
 }
 
-async function flowTabOrToast() {
-  const tab = await findFlowTab({ open: false });
-  if (!tab) toast('Open a Google Flow project tab first');
+async function siteTabOrToast() {
+  const tab = await findSiteTab(site(), { open: false });
+  if (!tab) toast(site() === 'gemini' ? 'Open Gemini (gemini.google.com) in a tab first' : 'Open a Google Flow project tab first');
   return tab;
 }
 
+function renderSiteLabels() {
+  const { name } = SITES[site()];
+  $('elementsTitle').textContent = `${name} elements`;
+  $('elementsHelp').innerHTML =
+    site() === 'gemini'
+      ? 'FlowBatch finds these automatically. If Gemini’s layout changes and a step fails, open Gemini, press <b>Pick</b> and click the element on the page.'
+      : 'FlowBatch finds these automatically. If Flow’s layout changes and a step fails, open a Flow project, press <b>Pick</b> and click the element on the page.';
+  $('btnDiagnose').textContent = `Diagnose current ${name} tab`;
+  $('diagOutput').hidden = true;
+}
+
 function renderSelectorRows() {
+  const { name } = SITES[site()];
+  const selectors = siteSelectors();
   $('selectorRows').replaceChildren(
-    ...SELECTOR_KEYS.map(({ key, label, hint }) => {
-      const input = el('input', { class: 'input', placeholder: 'auto-detect', value: app.settings.selectors[key] || '', spellcheck: 'false' });
+    ...SELECTOR_KEYS[site()].map(({ key, label, hint }) => {
+      const input = el('input', { class: 'input', placeholder: 'auto-detect', value: selectors[key] || '', spellcheck: 'false' });
       input.addEventListener('change', () => {
-        app.settings.selectors[key] = input.value.trim();
+        selectors[key] = input.value.trim();
         persistSettings();
       });
       const pick = async () => {
-        const tab = await flowTabOrToast();
+        const tab = await siteTabOrToast();
         if (!tab) return;
         await chrome.tabs.update(tab.id, { active: true });
-        toast(`Click the ${hint} on the Flow page (Esc cancels)`, 4000);
+        toast(`Click the ${hint} on the ${name} page (Esc cancels)`, 4000);
         try {
           const r = await callAgent(tab.id, 'pickElement', { label: hint }, { timeoutMs: 300000 });
           if (!r) return;
           input.value = r.selector;
-          app.settings.selectors[key] = r.selector;
+          selectors[key] = r.selector;
           persistSettings();
           toast(`Saved ${label}`);
         } catch (e) {
@@ -52,7 +79,7 @@ function renderSelectorRows() {
         }
       };
       const test = async () => {
-        const tab = await flowTabOrToast();
+        const tab = await siteTabOrToast();
         if (!tab) return;
         await chrome.tabs.update(tab.id, { active: true });
         try {
@@ -60,7 +87,7 @@ function renderSelectorRows() {
             const r = await callAgent(tab.id, 'testSelector', { selector: input.value.trim() });
             toast(r.found ? `Found: ${r.label || 'element'}` : 'Selector matched nothing on this page', 3500);
           } else {
-            const r = await callAgent(tab.id, 'highlightAuto', { selectors: app.settings.selectors, key });
+            const r = await callAgent(tab.id, 'highlightAuto', { selectors, key });
             toast(r ? `Auto-detected: ${r.label || r.tag}` : 'Nothing auto-detected — use Pick', 3500);
           }
         } catch (e) {
@@ -69,7 +96,7 @@ function renderSelectorRows() {
       };
       const clear = () => {
         input.value = '';
-        app.settings.selectors[key] = '';
+        selectors[key] = '';
         persistSettings();
       };
       return el(
@@ -94,9 +121,11 @@ function fillForm() {
   $('setBaseFolder').value = s.baseFolder;
   $('setSeparator').value = s.separator;
   $('setFlowUrl').value = s.flowUrl;
+  $('setGeminiUrl').value = s.geminiUrl;
   $('setMentionMode').value = s.mentionMode;
   document.querySelectorAll('[data-setting]').forEach((i) => (i.checked = !!s[i.dataset.setting]));
   for (const [key, st] of Object.entries(steppers)) st.set(s[key]);
+  renderSiteLabels();
   renderSelectorRows();
   applyTheme();
 }
@@ -136,6 +165,10 @@ export function initSettings() {
     app.settings.flowUrl = e.target.value.trim() || 'https://flow.google.com/';
     persistSettings();
   });
+  $('setGeminiUrl').addEventListener('change', (e) => {
+    app.settings.geminiUrl = e.target.value.trim() || 'https://gemini.google.com/app';
+    persistSettings();
+  });
   $('setMentionMode').addEventListener('change', (e) => {
     app.settings.mentionMode = e.target.value;
     persistSettings();
@@ -163,18 +196,17 @@ export function initSettings() {
   $('btnDiagnose').addEventListener('click', async () => {
     const out = $('diagOutput');
     out.hidden = false;
-    const tab = await flowTabOrToast();
+    const tab = await siteTabOrToast();
     if (!tab) {
-      out.textContent = 'No Google Flow tab found.';
+      out.textContent = `No ${SITES[site()].fullName} tab found.`;
       return;
     }
     out.textContent = 'Inspecting…';
     try {
-      const r = await callAgent(tab.id, 'diagnose', { selectors: app.settings.selectors });
+      const r = await callAgent(tab.id, 'diagnose', { selectors: siteSelectors() });
       out.textContent = JSON.stringify(r, null, 2);
-      log(
-        `Diagnose: prompt=${!!r.promptBox} submit=${!!r.submitButton} add=${!!r.addImageButton} settings=${!!r.settingsButton} startFrame=${!!r.startFrameSlot} endFrame=${!!r.endFrameSlot}`
-      );
+      const found = SELECTOR_KEYS[site()].map(({ key }) => `${key}=${!!r[key]}`).join(' ');
+      log(`Diagnose ${SITES[site()].name}: ${found}${site() === 'gemini' ? ` replies=${r.responses} media=${r.mediaInLastReply}` : ''}`);
     } catch (e) {
       out.textContent = `Error: ${e.message}`;
     }
@@ -188,5 +220,9 @@ export function initSettings() {
     toast('Settings reset');
   });
 
+  on('siteChanged', () => {
+    renderSiteLabels();
+    renderSelectorRows();
+  });
   fillForm();
 }

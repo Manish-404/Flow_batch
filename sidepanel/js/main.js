@@ -1,5 +1,5 @@
 // Side panel entry: loads state, wires the queue / controls / progress / summary / log.
-import { app, on, persistSession } from './app.js';
+import { app, on, emit, persistSession } from './app.js';
 import { loadSettings, loadSession, listAssets } from './store.js';
 import { initAssets, addAssets, removeAllAssets } from './assets-ui.js';
 import { initPrompt, setMode } from './prompt-ui.js';
@@ -10,17 +10,22 @@ import { initPublish } from './publish-ui.js';
 import { initSplit } from './split-ui.js';
 import { generatedResults } from './results.js';
 import { Runner } from './runner.js';
-import { findFlowTab, callAgent } from './flow.js';
+import { SITES, findSiteTab, callAgent } from './site.js';
 import { $, el, pad, sanitizeSegment, splitPrompts, findMentions, fmtDuration, log, onLog, logLines, toast } from './utils.js';
 
 let renderQueued = false;
 let lastStep = '';
 
+const site = () => (app.session.site === 'gemini' ? 'gemini' : 'flow');
+const siteName = () => SITES[site()].name;
+// Start → end frame pairs need Flow's "Frames to video"; Gemini has no equivalent.
+const sequential = () => site() === 'flow' && app.session.mode === 'video' && app.session.seqFrames;
+
 // ---------------- queue ----------------
 function buildQueue() {
   const prompts = splitPrompts(app.session.promptText, app.settings.separator);
   const byName = new Map(app.assets.map((a) => [a.name.toLowerCase(), a.name]));
-  const seq = app.session.mode === 'video' && app.session.seqFrames;
+  const seq = sequential();
   return prompts.map((prompt, i) => {
     const mentioned = findMentions(prompt);
     const mentions = [...new Set(mentioned.map((m) => byName.get(m.toLowerCase())).filter(Boolean))];
@@ -42,7 +47,7 @@ function buildQueue() {
 
 /** Required heads-up: odd image counts leave one scene that can't use start/end frames. */
 function confirmSequentialPlan() {
-  if (!(app.session.mode === 'video' && app.session.seqFrames)) return true;
+  if (!sequential()) return true;
   const q = app.session.queue;
   const framePairs = q.filter((i) => i.videoMode === 'frames').length;
   const single = q.filter((i) => i.videoMode === 'ingredients');
@@ -117,8 +122,9 @@ function queueRow(item) {
   if (item.results?.length) {
     const thumbs = el('div', { class: 'q-results' });
     for (const r of item.results) {
-      if (r.kind !== 'image' || r.url.startsWith('blob:')) continue;
-      const img = el('img', { src: r.url, alt: '', loading: 'lazy', title: r.filename ? `${r.filename} · ${r.download || ''}` : '' });
+      const src = r.preview || r.url; // Gemini: the on-page copy, lighter than full size
+      if (r.kind !== 'image' || src.startsWith('blob:')) continue;
+      const img = el('img', { src, alt: '', loading: 'lazy', title: r.filename ? `${r.filename} · ${r.download || ''}` : '' });
       img.onerror = () => img.remove();
       thumbs.append(img);
     }
@@ -201,6 +207,8 @@ function renderControls() {
   $('btnPause').disabled = state !== 'running' || app.runner.pauseRequested;
   $('btnStop').disabled = state === 'idle';
   $('btnNewProject').disabled = state === 'running';
+  // A run (or a paused one) belongs to the site it started on.
+  document.querySelectorAll('[data-site]').forEach((b) => (b.disabled = state !== 'idle'));
 }
 
 function renderAll() {
@@ -232,8 +240,8 @@ async function startRun(keepQueue = false) {
   const same = q.length === prompts.length && q.every((item, i) => item.prompt === prompts[i]);
   if (same && q.some((i) => i.status === 'pending')) {
     log('Continuing the existing queue');
-    // The Sequential frames switch may have been flipped since the queue was built.
-    const seq = app.session.mode === 'video' && app.session.seqFrames;
+    // The Sequential frames switch (or the site) may have changed since the queue was built.
+    const seq = sequential();
     q.forEach((i) => (i.videoMode = seq ? (i.mentions.length >= 2 ? 'frames' : 'ingredients') : null));
   } else {
     if (same && q.length && !confirm('Every prompt in the queue has already run. Run them all again?')) return;
@@ -247,7 +255,7 @@ async function startRun(keepQueue = false) {
   }
   if (!app.session.projectName.trim()) {
     const d = new Date();
-    app.session.projectName = `Flow_${d.getFullYear()}${pad(d.getMonth() + 1, 2)}${pad(d.getDate(), 2)}_${pad(d.getHours(), 2)}${pad(d.getMinutes(), 2)}`;
+    app.session.projectName = `${siteName()}_${d.getFullYear()}${pad(d.getMonth() + 1, 2)}${pad(d.getDate(), 2)}_${pad(d.getHours(), 2)}${pad(d.getMinutes(), 2)}`;
     $('projectName').value = app.session.projectName;
   }
   persistSession();
@@ -255,10 +263,13 @@ async function startRun(keepQueue = false) {
   runner.start();
 }
 
+/** Flow: a new project. Gemini: a new chat. Both clear the work queue. */
 async function newProject() {
   if (app.runner.state === 'running') return;
+  const gemini = site() === 'gemini';
+  const what = gemini ? 'a new Gemini chat' : 'a new project';
   const hasWork = app.session.queue.length > 0;
-  if (hasWork && !confirm('Start a new project? The work queue will be cleared (assets and prompts are kept).')) return;
+  if (hasWork && !confirm(`Start ${what}? The work queue will be cleared (assets and prompts are kept).`)) return;
   if (app.runner.state === 'paused') app.runner.stop();
   app.session.queue = [];
   app.session.projectName = '';
@@ -267,12 +278,13 @@ async function newProject() {
   persistSession();
   scheduleRender();
   try {
-    lastStep = 'Opening a new Flow project…';
+    lastStep = gemini ? 'Opening a new Gemini chat…' : 'Opening a new Flow project…';
     scheduleRender();
-    await app.runner.newProject();
-    toast('New Flow project ready');
+    if (gemini) await app.runner.newChat();
+    else await app.runner.newProject();
+    toast(gemini ? 'New Gemini chat ready' : 'New Flow project ready');
   } catch (e) {
-    log(`New project: ${e.message}`, 'warn');
+    log(`${gemini ? 'New chat' : 'New project'}: ${e.message}`, 'warn');
     toast(e.message, 4000);
   } finally {
     lastStep = '';
@@ -281,12 +293,18 @@ async function newProject() {
 }
 
 // ---------------- generated results ----------------
+// Results remember the site that made them: "the Gemini tab, so keep it" / "the Flow and Gemini tabs, so keep them".
+function resultTabs(results) {
+  const names = [...new Set(results.map((r) => SITES[r.res.site || 'flow'].name))];
+  return names.length > 1 ? `the ${names.join(' and ')} tabs, so keep them` : `the ${names[0]} tab, so keep it`;
+}
+
 function zipResults() {
   const results = generatedResults();
   if (!results.length) return toast('No generated results yet');
   return openZipPicker({
     title: 'Generated results → ZIP',
-    note: 'Untick anything you do not want in the archive. Files are read from the Flow tab, so keep it open.',
+    note: `Untick anything you do not want in the archive. Files are read from ${resultTabs(results)} open.`,
     filename: `${sanitizeSegment(app.session.projectName, 'flowbatch')}_results`,
     items: results.map((r) => ({ ...r, getBlob: () => app.runner.resultBlob(r.res) })),
   });
@@ -299,7 +317,7 @@ async function resultsToAssets() {
   if (
     !confirm(
       `Replace the current ${app.assets.length} asset(s) with the ${images.length} generated image(s) as pic_001…?\n\n` +
-        'They are downloaded from the Flow tab, which must stay open.'
+        `They are downloaded from ${resultTabs(images)} open until the import finishes.`
     )
   )
     return;
@@ -328,34 +346,67 @@ async function resultsToAssets() {
   persistSession();
   lastStep = '';
   scheduleRender();
-  log(`Imported ${items.length} generated image(s) as pic_001… and switched to Video · sequential frames`, 'ok');
-  toast(`Imported ${items.length} image(s) — now press “One prompt per frame pair”`);
+  if (site() === 'gemini') {
+    // Start → end pairs need Flow; in Gemini each image becomes its own video.
+    log(`Imported ${items.length} generated image(s) as pic_001… and switched to Video`, 'ok');
+    toast(`Imported ${items.length} image(s) — now press “One prompt per asset”`);
+  } else {
+    log(`Imported ${items.length} generated image(s) as pic_001… and switched to Video · sequential frames`, 'ok');
+    toast(`Imported ${items.length} image(s) — now press “One prompt per frame pair”`);
+  }
   return undefined;
 }
 
-// ---------------- connection pill ----------------
+// ---------------- site switch / connection pill ----------------
+function renderSite() {
+  const gemini = site() === 'gemini';
+  document.querySelectorAll('[data-site]').forEach((b) => b.classList.toggle('active', b.dataset.site === site()));
+  $('btnOpenFlow').textContent = `Open ${siteName()}`;
+  $('btnNewProject').textContent = gemini ? 'New chat' : 'New project';
+  $('btnSummaryNew').textContent = gemini ? 'New chat' : 'New project';
+}
+
+function setSite(next) {
+  if (app.runner.state !== 'idle' || next === site()) return;
+  app.session.site = next;
+  persistSession();
+  renderSite();
+  emit('siteChanged');
+  $('connPill').className = 'pill';
+  $('connText').textContent = `Checking ${siteName()} tab…`;
+  refreshConnection();
+  scheduleRender();
+  log(`Target: ${SITES[next].fullName}`);
+}
+
+let connSeq = 0;
 async function refreshConnection() {
+  const seq = ++connSeq;
+  const current = site();
+  const name = siteName();
   const pill = $('connPill');
+  const show = (cls, text) => {
+    if (seq !== connSeq) return; // the site was switched meanwhile
+    pill.className = `pill ${cls}`;
+    $('connText').textContent = text;
+  };
   try {
-    const tab = await findFlowTab({ open: false });
+    const tab = await findSiteTab(current, { open: false });
+    if (seq !== connSeq) return;
     if (!tab) {
-      pill.className = 'pill bad';
-      $('connText').textContent = 'No Google Flow tab open';
+      show('bad', `No ${SITES[current].fullName} tab open`);
       $('btnOpenFlow').hidden = false;
       return;
     }
     $('btnOpenFlow').hidden = true;
-    const info = await callAgent(tab.id, 'ping', { selectors: app.settings.selectors }, { timeoutMs: 4000, retries: 1 });
-    if (info.isProject && info.hasPromptBox) {
-      pill.className = 'pill ok';
-      $('connText').textContent = 'Flow project connected';
-    } else {
-      pill.className = 'pill warn';
-      $('connText').textContent = info.isProject ? 'Flow project — prompt box not found' : 'Flow open — no project yet';
-    }
+    const info = await callAgent(tab.id, 'ping', { selectors: SITES[current].selectors(app.settings) }, { timeoutMs: 4000, retries: 1 });
+    if (current === 'gemini') {
+      if (info.hasPromptBox) show('ok', 'Gemini connected');
+      else show('warn', 'Gemini open — prompt box not found (signed in?)');
+    } else if (info.isProject && info.hasPromptBox) show('ok', 'Flow project connected');
+    else show('warn', info.isProject ? 'Flow project — prompt box not found' : 'Flow open — no project yet');
   } catch {
-    pill.className = 'pill warn';
-    $('connText').textContent = 'Flow tab found — reload it once';
+    show('warn', `${name} tab found — reload it once`);
   }
 }
 
@@ -429,7 +480,9 @@ async function boot() {
   $('btnZipResults').addEventListener('click', zipResults);
   $('btnResultsToAssets').addEventListener('click', resultsToAssets);
   $('btnOpenFolder').addEventListener('click', () => chrome.downloads.showDefaultFolder());
-  $('btnOpenFlow').addEventListener('click', () => chrome.tabs.create({ url: app.settings.flowUrl }));
+  $('btnOpenFlow').addEventListener('click', () => chrome.tabs.create({ url: SITES[site()].home(app.settings) }));
+  document.querySelectorAll('[data-site]').forEach((b) => b.addEventListener('click', () => setSite(b.dataset.site)));
+  renderSite();
   $('btnCopyLog').addEventListener('click', async () => {
     await navigator.clipboard.writeText(logLines.map((l) => `${l.t.toISOString()} [${l.level}] ${l.message}`).join('\n'));
     toast('Log copied');

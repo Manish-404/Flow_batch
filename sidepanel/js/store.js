@@ -16,9 +16,13 @@ export const DEFAULT_SETTINGS = {
   mentionMode: 'remove',
   theme: 'dark',
   selectors: { promptBox: '', submitButton: '', addImageButton: '', settingsButton: '', startFrameSlot: '', endFrameSlot: '' },
+  geminiUrl: 'https://gemini.google.com/app',
+  geminiNewChat: true,
+  geminiSelectors: { promptBox: '', submitButton: '', addImageButton: '', toolsButton: '', modelButton: '', newChatButton: '' },
 };
 
 export const DEFAULT_SESSION = {
+  site: 'flow',
   projectName: '',
   promptText: '',
   mode: 'image',
@@ -26,6 +30,7 @@ export const DEFAULT_SESSION = {
   model: 'nano-banana-pro',
   count: 1,
   seqFrames: false,
+  gemini: { model: 'keep', aspect: 'keep' },
   queue: [],
   split: { clipSec: 5, start: 0, end: '', prefix: 'clip_', format: 'mp4', quality: 'high', toDownloads: false, v: 2 },
   publish: {
@@ -71,12 +76,41 @@ export const ASPECTS = {
   ],
 };
 
+// Gemini's model picker in the prompt box — one setting for images and videos (Veo makes the
+// videos whichever is picked). `match` is tested against its menu items.
+const GEMINI_MODEL_LIST = [
+  { id: 'keep', label: "Gemini's current", sub: "Don't change", icon: '–', match: null },
+  { id: 'fast', label: 'Fast', sub: 'Quickest', icon: 'G', match: '^fast\\b|flash' },
+  { id: 'thinking', label: 'Thinking', sub: 'Images: Nano Banana Pro', icon: 'G', match: '^thinking\\b' },
+  { id: 'pro', label: 'Pro', sub: 'Most capable', icon: 'G', match: '^(\\d(\\.\\d)?\\s*)?pro\\b' },
+];
+export const GEMINI_MODELS = { image: GEMINI_MODEL_LIST, video: GEMINI_MODEL_LIST };
+
+// Gemini has no aspect-ratio control, so a chosen ratio is added to the prompt as text.
+const ADDED = 'Added to the prompt';
+export const GEMINI_ASPECTS = {
+  image: [
+    { id: 'keep', label: 'Leave to Gemini', sub: 'Nothing added', icon: '–' },
+    { id: '16:9', label: '16:9', sub: ADDED, icon: 'land' },
+    { id: '9:16', label: '9:16', sub: ADDED, icon: 'port' },
+    { id: '1:1', label: '1:1', sub: ADDED, icon: 'sq' },
+    { id: '4:3', label: '4:3', sub: ADDED, icon: 'land' },
+    { id: '3:4', label: '3:4', sub: ADDED, icon: 'port' },
+  ],
+  video: [
+    { id: 'keep', label: 'Leave to Gemini', sub: 'Nothing added', icon: '–' },
+    { id: '16:9', label: '16:9', sub: ADDED, icon: 'land' },
+    { id: '9:16', label: '9:16', sub: ADDED, icon: 'port' },
+  ],
+};
+
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
 export async function loadSettings() {
   const { settings } = await chrome.storage.local.get('settings');
   const merged = { ...clone(DEFAULT_SETTINGS), ...(settings || {}) };
   merged.selectors = { ...DEFAULT_SETTINGS.selectors, ...(settings?.selectors || {}) };
+  merged.geminiSelectors = { ...DEFAULT_SETTINGS.geminiSelectors, ...(settings?.geminiSelectors || {}) };
   return merged;
 }
 export const saveSettings = (settings) => chrome.storage.local.set({ settings });
@@ -90,6 +124,7 @@ export async function loadSession() {
   // Clips used to default to WebM, which Flow rejects. Move sessions saved before v2 to MP4 once;
   // a WebM choice made after that sticks.
   if (session?.split && !session.split.v) merged.split = { ...merged.split, format: 'mp4', v: 2 };
+  merged.gemini = { ...DEFAULT_SESSION.gemini, ...(session?.gemini || {}) };
   merged.publish = { ...DEFAULT_SESSION.publish, ...(session?.publish || {}) };
   merged.publish.platforms = { ...DEFAULT_SESSION.publish.platforms, ...(session?.publish?.platforms || {}) };
   // A queue item left "running" by a closed panel is pending again.

@@ -1,30 +1,51 @@
-// Finding the Google Flow tab and talking to the content-script agent inside it.
+// The sites FlowBatch drives (Google Flow, Gemini): finding their tab and talking to the
+// content-script agent inside it.
 import { sleep, blobToDataUrl } from './utils.js';
 
-export function isFlowUrl(url) {
-  return /^https:\/\/([a-z0-9-]+\.)?flow\.google\.com\//i.test(url || '') || /^https:\/\/labs\.google\/fx\//i.test(url || '');
-}
+export const SITES = {
+  flow: {
+    name: 'Flow',
+    fullName: 'Google Flow',
+    matches: (url) => /^https:\/\/([a-z0-9-]+\.)?flow\.google\.com\//i.test(url) || /^https:\/\/labs\.google\/fx\//i.test(url),
+    home: (settings) => settings?.flowUrl || 'https://flow.google.com/',
+    selectors: (settings) => settings.selectors,
+    agent: 'content/flow-agent.js',
+  },
+  gemini: {
+    name: 'Gemini',
+    fullName: 'Gemini',
+    matches: (url) => /^https:\/\/gemini\.google\.com\//i.test(url),
+    home: (settings) => settings?.geminiUrl || 'https://gemini.google.com/app',
+    selectors: (settings) => settings.geminiSelectors,
+    agent: 'content/gemini-agent.js',
+  },
+};
 
-let pinnedTabId = null;
-export const pinTab = (id) => (pinnedTabId = id);
-export const unpinTab = () => (pinnedTabId = null);
+export const siteOf = (url) => Object.keys(SITES).find((k) => SITES[k].matches(url || '')) || null;
+export const isFlowUrl = (url) => SITES.flow.matches(url || '');
 
-export async function findFlowTab({ open = false, flowUrl } = {}) {
-  if (pinnedTabId != null) {
+let pinned = null; // { site, tabId } while a queue runs
+export const pinTab = (site, tabId) => (pinned = { site, tabId });
+export const unpinTab = () => (pinned = null);
+
+/** The tab to use for `site`: the pinned one, the active one, or the most recent. */
+export async function findSiteTab(site, { open = false, settings } = {}) {
+  const matches = SITES[site].matches;
+  if (pinned?.site === site) {
     try {
-      const t = await chrome.tabs.get(pinnedTabId);
-      if (isFlowUrl(t.url || t.pendingUrl)) return t;
+      const t = await chrome.tabs.get(pinned.tabId);
+      if (matches(t.url || t.pendingUrl || '')) return t;
     } catch {
       /* tab closed */
     }
-    pinnedTabId = null;
+    pinned = null;
   }
   const [active] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  if (active && isFlowUrl(active.url)) return active;
-  const tabs = (await chrome.tabs.query({})).filter((t) => isFlowUrl(t.url));
+  if (active && matches(active.url || '')) return active;
+  const tabs = (await chrome.tabs.query({})).filter((t) => matches(t.url || ''));
   if (tabs.length) return tabs.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0))[0];
   if (!open) return null;
-  const created = await chrome.tabs.create({ url: flowUrl || 'https://flow.google.com/', active: true });
+  const created = await chrome.tabs.create({ url: SITES[site].home(settings), active: true });
   await waitTabComplete(created.id, 30000);
   return chrome.tabs.get(created.id);
 }
@@ -43,14 +64,23 @@ export async function waitTabComplete(tabId, timeoutMs = 30000) {
   return false;
 }
 
+// Tabs opened before the extension was (re)loaded have no agent yet.
 async function inject(tabId) {
+  let site = null;
+  try {
+    const t = await chrome.tabs.get(tabId);
+    site = siteOf(t.url || t.pendingUrl);
+  } catch {
+    return;
+  }
+  if (!site) return;
   try {
     await chrome.scripting.executeScript({ target: { tabId }, files: ['content/page-hook.js'], world: 'MAIN' });
   } catch {
     /* ignore */
   }
   try {
-    await chrome.scripting.executeScript({ target: { tabId }, files: ['content/dom.js', 'content/flow-agent.js'] });
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['content/dom.js', SITES[site].agent] });
   } catch {
     /* ignore */
   }
@@ -59,7 +89,7 @@ async function inject(tabId) {
 const NOT_CONNECTED = /Receiving end does not exist|Could not establish connection/i;
 
 /**
- * Call an agent action in the Flow tab.
+ * Call an agent action in a Flow or Gemini tab.
  * `retry` re-sends after a page reload only when the message never reached the page,
  * so non-idempotent steps (submit) are never sent twice.
  */
@@ -70,7 +100,7 @@ export async function callAgent(tabId, action, payload = {}, { timeoutMs = 12000
       const res = await Promise.race([
         chrome.tabs.sendMessage(tabId, { channel: 'flowbatch', action, payload }),
         sleep(timeoutMs).then(() => {
-          throw new Error(`Flow tab did not answer "${action}" within ${Math.round(timeoutMs / 1000)}s`);
+          throw new Error(`The tab did not answer "${action}" within ${Math.round(timeoutMs / 1000)}s`);
         }),
       ]);
       if (!res) throw new Error('Could not establish connection (empty response)');
@@ -95,7 +125,7 @@ export async function callAgent(tabId, action, payload = {}, { timeoutMs = 12000
 const CHUNK_BYTES = 6 * 1024 * 1024;
 
 /**
- * Stream files into the Flow tab in chunks, ready for the agent's `attachFiles`.
+ * Stream files into the Flow or Gemini tab in chunks, ready for the agent's `attachFiles`.
  * files: [{ blob, name, type }] — returns one key per file, in order.
  */
 export async function stageFiles(tabId, files, { onProgress, signal } = {}) {

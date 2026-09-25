@@ -1,7 +1,7 @@
 // "Prompt input" card: highlighted editor, @mention chips/autocomplete, template expansion,
 // and the Image/Video · aspect ratio · model · count controls.
 import { app, on, persistSession } from './app.js';
-import { MODELS, ASPECTS } from './store.js';
+import { MODELS, ASPECTS, GEMINI_MODELS, GEMINI_ASPECTS } from './store.js';
 import { IconSelect } from './controls.js';
 import { $, el, splitPrompts, findMentions, toast } from './utils.js';
 
@@ -207,12 +207,29 @@ function expandPerPair() {
 }
 
 // ---------- generation options ----------
+// Flow and Gemini keep separate ratio / model choices; `choice()` is the one for the current site.
+const onGemini = () => app.session.site === 'gemini';
+const choice = () => (onGemini() ? app.session.gemini : app.session);
+
+/** Mark-up hooks: data-video-mode (video only), data-flow-only, data-gemini-only. */
+function applyVisibility() {
+  const video = app.session.mode === 'video';
+  const gemini = onGemini();
+  document.querySelectorAll('[data-video-mode], [data-flow-only], [data-gemini-only]').forEach((n) => {
+    n.hidden =
+      (n.hasAttribute('data-video-mode') && !video) ||
+      (n.hasAttribute('data-flow-only') && gemini) ||
+      (n.hasAttribute('data-gemini-only') && !gemini);
+  });
+}
+
 export function setMode(mode) {
   app.session.mode = mode;
   document.querySelectorAll('[data-mode]').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
-  document.querySelectorAll('[data-video-mode]').forEach((n) => (n.hidden = mode !== 'video'));
-  app.session.aspect = aspectSelect.setOptions(ASPECTS[mode], app.session.aspect);
-  app.session.model = modelSelect.setOptions(MODELS[mode], app.session.model);
+  applyVisibility();
+  const c = choice();
+  c.aspect = aspectSelect.setOptions((onGemini() ? GEMINI_ASPECTS : ASPECTS)[mode], c.aspect);
+  c.model = modelSelect.setOptions((onGemini() ? GEMINI_MODELS : MODELS)[mode], c.model);
   persistSession();
 }
 
@@ -270,14 +287,14 @@ export function initPrompt() {
 
   aspectSelect = new IconSelect($('aspectSelect'), {
     onChange: (v) => {
-      app.session.aspect = v;
+      choice().aspect = v;
       persistSession();
     },
   });
   modelSelect = new IconSelect($('modelSelect'), {
     iconClass: 'model',
     onChange: (v) => {
-      app.session.model = v;
+      choice().model = v;
       persistSession();
     },
   });
@@ -298,6 +315,7 @@ export function initPrompt() {
     $('sepHint').textContent = app.settings.separator;
     refresh();
   });
+  on('siteChanged', () => setMode(app.session.mode));
   $('sepHint').textContent = app.settings.separator;
   renderChips();
   refresh();

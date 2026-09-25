@@ -1,5 +1,5 @@
-// Runs in the page's MAIN world at document_start.
-// While FlowBatch is attaching a reference image it sets
+// Runs in the page's MAIN world at document_start (Flow and Gemini).
+// While FlowBatch is attaching a file it sets
 // <html data-flowbatch-capture="1">. Any file input the page tries to open during that
 // window is captured instead of opening the OS file picker, and parked in the DOM so the
 // isolated content script can find it and assign files to it.

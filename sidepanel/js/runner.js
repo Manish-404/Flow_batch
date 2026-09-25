@@ -1,9 +1,9 @@
 // Queue orchestration: one prompt at a time — attach references, type, submit,
-// wait until Flow finishes (or fails), download, then move on.
-import { MODELS } from './store.js';
-import { findFlowTab, callAgent, pinTab, unpinTab, waitTabComplete } from './flow.js';
-import { downloadMedia } from './downloads.js';
-import { sleep, log, pad, slug, sanitizeSegment, promptForFlow, blobToDataUrl, dataUrlToBlob } from './utils.js';
+// wait until Flow or Gemini finishes (or fails), download, then move on.
+import { MODELS, GEMINI_MODELS } from './store.js';
+import { SITES, findSiteTab, callAgent, pinTab, unpinTab, waitTabComplete } from './site.js';
+import { downloadMedia, fetchMediaBlob } from './downloads.js';
+import { sleep, log, pad, slug, sanitizeSegment, promptForFlow, blobToDataUrl } from './utils.js';
 
 class StopError extends Error {
   constructor() {
@@ -21,10 +21,12 @@ export class Runner {
     this.state = 'idle'; // idle | running | paused
     this.pauseRequested = false;
     this.stopRequested = false;
+    this.site = 'flow'; // the site of the current run
     this.tabId = null;
     this.startedAt = 0;
     this.itemDurations = [];
     this.appliedVideoMode = null;
+    this.geminiApplied = false; // tool and model chosen in the current Gemini chat
   }
 
   get settings() {
@@ -33,9 +35,17 @@ export class Runner {
   get session() {
     return this.ctx.getSession();
   }
+  get siteName() {
+    return SITES[this.site].name;
+  }
 
   call(action, payload = {}, opts) {
-    return callAgent(this.tabId, action, { selectors: this.settings.selectors, ...payload }, opts);
+    return callAgent(this.tabId, action, { selectors: SITES[this.site].selectors(this.settings), ...payload }, opts);
+  }
+
+  useTab(site, tabId) {
+    this.site = site;
+    this.tabId = tabId;
   }
 
   pause() {
@@ -78,15 +88,21 @@ export class Runner {
     this.startedAt = Date.now();
     this.itemDurations = [];
     this.appliedVideoMode = null;
+    this.geminiApplied = false;
+    this.site = this.session.site === 'gemini' ? 'gemini' : 'flow';
     this.ctx.onState();
 
     try {
-      const tab = await findFlowTab({ open: true, flowUrl: this.settings.flowUrl });
-      this.tabId = tab.id;
-      pinTab(tab.id);
-      log(`Using Flow tab: ${tab.title || tab.url}`);
-      await this.ensureProject(false);
-      if (this.settings.applyFlowSettings) await this.applyFlowSettings();
+      const tab = await findSiteTab(this.site, { open: true, settings: this.settings });
+      this.useTab(this.site, tab.id);
+      pinTab(this.site, tab.id);
+      log(`Using ${this.siteName} tab: ${tab.title || tab.url}`);
+      if (this.site === 'gemini') {
+        await this.call('waitReady', { timeoutMs: 30000 }, { timeoutMs: 40000 });
+      } else {
+        await this.ensureProject(false);
+        if (this.settings.applyFlowSettings) await this.applyFlowSettings();
+      }
 
       let consecutiveFails = 0;
       for (;;) {
@@ -97,7 +113,7 @@ export class Runner {
         if (this.stopRequested) break;
         consecutiveFails = ok ? 0 : consecutiveFails + 1;
         if (this.settings.stopOnFailure && consecutiveFails >= 3) {
-          log('3 failures in a row — queue stopped. Check the Flow tab and the log.', 'error');
+          log(`3 failures in a row — queue stopped. Check the ${this.siteName} tab and the log.`, 'error');
           break;
         }
         const more = this.session.queue.some((q) => q.status === 'pending');
@@ -123,7 +139,7 @@ export class Runner {
     }
   }
 
-  // ---------- project / settings ----------
+  // ---------- Flow project / settings ----------
   async ensureProject(forceNew) {
     const s = this.settings;
     let info = await this.call('ping', {}, { timeoutMs: 20000 });
@@ -212,6 +228,37 @@ export class Runner {
     }
   }
 
+  // ---------- Gemini chat / settings ----------
+  /** Start a fresh chat so earlier images and replies don't steer the next result. */
+  async openGeminiChat() {
+    const r = await this.call('newChat', {}, { timeoutMs: 20000, retries: 1 });
+    if (r.method === 'navigate') {
+      await sleep(1000);
+      await waitTabComplete(this.tabId, 30000);
+      await sleep(1500);
+    }
+    await this.call('waitReady', { timeoutMs: 30000 }, { timeoutMs: 40000 });
+    this.geminiApplied = false;
+    return r;
+  }
+
+  /** Pick the Create images / Create videos tool and the model — once per chat. */
+  async applyGeminiSettings(tag, step) {
+    if (!this.settings.applyFlowSettings || this.geminiApplied) return;
+    this.geminiApplied = true;
+    const { mode, gemini } = this.session;
+    const m = GEMINI_MODELS[mode].find((x) => x.id === gemini?.model);
+    step(`Choosing Gemini's ${mode === 'video' ? 'video' : 'image'} tool`);
+    try {
+      const r = await this.call('applySettings', { mode, modelMatch: m?.match || null }, { timeoutMs: 30000, retries: 1 });
+      const missing = r.report.some((x) => /not-found|unavailable/.test(x));
+      log(`${tag} Gemini → ${r.report.join(' · ')}`, missing ? 'warn' : 'info');
+      if (missing) log('Pick the tool or model in Gemini by hand, or calibrate it in Settings → Gemini elements', 'warn');
+    } catch (e) {
+      log(`Could not choose the Gemini tool: ${e.message}`, 'warn');
+    }
+  }
+
   // ---------- one queue item ----------
   async runItem(item) {
     const s = this.settings;
@@ -219,6 +266,7 @@ export class Runner {
     item.status = 'running';
     item.error = '';
     item.results = [];
+    item.site = this.site;
     this.ctx.onUpdate();
     const attempts = s.retries + 1;
     for (let a = 1; a <= attempts; a++) {
@@ -226,7 +274,15 @@ export class Runner {
       item.attempts = a;
       try {
         const media = await this.generate(item);
-        item.results = media.map((m) => ({ url: m.url, kind: m.kind, w: m.w, h: m.h }));
+        item.results = media.map((m) => ({
+          url: m.url,
+          altUrls: m.altUrls || [],
+          preview: m.preview || null,
+          kind: m.kind,
+          w: m.w,
+          h: m.h,
+          site: this.site,
+        }));
         item.status = 'success';
         item.error = '';
         this.itemDurations.push(Date.now() - t0);
@@ -255,23 +311,29 @@ export class Runner {
 
   async generate(item) {
     const s = this.settings;
+    const gemini = this.site === 'gemini';
     const tag = `#${pad(item.n, 2)}`;
     const step = (t) => this.ctx.onStep(`${tag} · ${t}`);
     const assets = this.ctx.getAssets();
     const byName = new Map(assets.map((a) => [a.name.toLowerCase(), a]));
 
-    step('Waiting for Flow prompt box');
+    if (gemini && s.geminiNewChat) {
+      step('Opening a new Gemini chat');
+      await this.openGeminiChat();
+    }
+    step(`Waiting for ${this.siteName} prompt box`);
     await this.call('waitReady', { timeoutMs: 30000 }, { timeoutMs: 40000 });
 
-    await this.applyVideoMode(item, step);
+    if (gemini) await this.applyGeminiSettings(tag, step);
+    else await this.applyVideoMode(item, step);
 
     if (s.clearReferences) {
       const r = await this.call('clearReferences', {}, { timeoutMs: 20000 });
       if (r.removed) log(`${tag} removed ${r.removed} previous reference(s)`);
     }
 
-    // A frames-to-video scene needs its two images in the start and end slots, in that order.
-    const slots = item.videoMode === 'frames' ? ['start', 'end'] : [];
+    // A Flow frames-to-video scene needs its two images in the start and end slots, in that order.
+    const slots = !gemini && item.videoMode === 'frames' ? ['start', 'end'] : [];
     for (const [i, name] of item.mentions.entries()) {
       if (this.stopRequested) throw new StopError();
       const asset = byName.get(name.toLowerCase());
@@ -281,12 +343,18 @@ export class Runner {
       const dataUrl = await blobToDataUrl(asset.blob);
       const r = await this.call('attachImage', { name: asset.name, dataUrl, type: asset.type, slot }, { timeoutMs: 120000, retries: 0 });
       const where = slot ? ` as ${r.slotFound ? `${slot} frame` : `${slot} frame (slot not found — used upload order)`}` : '';
-      log(`${tag} attached @${asset.name}${where} via ${r.method}${r.confirmed ? '' : ' (thumbnail not confirmed)'}${r.dialogClicks?.length ? ` · clicked ${r.dialogClicks.join(', ')}` : ''}`, r.confirmed ? 'info' : 'warn');
+      log(
+        `${tag} attached @${asset.name}${where} via ${r.method}${r.confirmed ? '' : ' (thumbnail not confirmed)'}${r.error ? ` — ${r.error}` : ''}${r.dialogClicks?.length ? ` · clicked ${r.dialogClicks.join(', ')}` : ''}`,
+        r.confirmed && !r.error ? 'info' : 'warn'
+      );
       if (r.openDialogs?.length) log(`${tag} dialog still open: ${r.openDialogs.join(' | ')}`, 'warn');
     }
 
     step('Typing prompt');
-    const text = promptForFlow(item.prompt, assets.map((a) => a.name), s.mentionMode);
+    let text = promptForFlow(item.prompt, assets.map((a) => a.name), s.mentionMode);
+    // Gemini has no ratio control; a chosen ratio goes into the prompt.
+    const ratio = this.session.gemini?.aspect;
+    if (gemini && ratio && ratio !== 'keep') text += `\n\nAspect ratio: ${ratio}.`;
     const typed = await this.call('setPrompt', { text }, { timeoutMs: 20000 });
     if (!typed.exact) log(`${tag} prompt text may not match exactly (editor reformatted it)`, 'warn');
     await sleep(400);
@@ -294,10 +362,11 @@ export class Runner {
     const baseline = await this.call('snapshot', {}, { timeoutMs: 20000 });
     if (this.stopRequested) throw new StopError();
     step('Submitting');
-    const sub = await this.call('submit', {}, { timeoutMs: 20000, retries: 0 });
+    // Gemini holds the send button until uploads finish, so its submit can take a while.
+    const sub = await this.call('submit', {}, { timeoutMs: gemini ? 120000 : 20000, retries: 0 });
     log(`${tag} submitted via ${sub.method}${sub.label ? ` (“${sub.label}”)` : ''}${sub.note ? ` — ${sub.note}` : ''}`);
 
-    return this.waitForResult(item, baseline, step);
+    return gemini ? this.waitForGemini(item, baseline, step) : this.waitForResult(item, baseline, step);
   }
 
   async waitForResult(item, baseline, step) {
@@ -363,12 +432,83 @@ export class Runner {
     }
   }
 
+  /**
+   * Wait for Gemini's reply. It is done when the stop button is gone and nothing in the reply
+   * is still loading; a finished reply without media is a failure, reported with Gemini's own
+   * words. Veo shows its video well after the text, so a video reply gets a long grace period.
+   */
+  async waitForGemini(item, baseline, step) {
+    const s = this.settings;
+    const tag = `#${pad(item.n, 2)}`;
+    const kind = this.session.mode === 'video' ? 'video' : 'image';
+    const noun = kind === 'video' ? 'a video' : 'an image';
+    const grace = kind === 'video' ? 150000 : 12000;
+    const t0 = Date.now();
+    const timeout = s.timeoutSec * 1000;
+    let accepted = false;
+    let mediaPolls = 0;
+    let donePolls = 0;
+    let doneSince = 0;
+    let lastDialog = '';
+    let last = null;
+    await this.wait(2500);
+
+    for (;;) {
+      await this.wait(s.pollSec * 1000);
+      const elapsed = Date.now() - t0;
+      let r;
+      try {
+        r = await this.call('poll', { baseline, kind }, { timeoutMs: 20000, retries: 2 });
+      } catch (e) {
+        log(`Poll error: ${e.message}`, 'warn');
+        if (elapsed > timeout) throw new Error(`Timed out after ${s.timeoutSec}s`);
+        continue;
+      }
+      last = r;
+      const n = r.newMedia.length;
+      if (!accepted && (r.sent || n || r.promptText !== baseline.promptText)) {
+        accepted = true;
+        log(`${tag} Gemini is answering`);
+      }
+      if (r.dialogText && r.dialogText !== lastDialog) {
+        lastDialog = r.dialogText;
+        log(`Dialog on Gemini page: ${r.dialogText}`, 'warn');
+      }
+      const working = r.generating || r.loaders > 0 || r.pendingMedia > 0;
+      step(`Generating… ${Math.round(elapsed / 1000)}s${n ? ` · ${n} ready` : ''}${working ? ' · in progress' : ''}`);
+
+      if (n > 0) {
+        mediaPolls++;
+        if ((r.done && mediaPolls >= 2) || mediaPolls >= 10) return r.newMedia;
+        continue;
+      }
+      mediaPolls = 0;
+
+      if (r.done) {
+        donePolls++;
+        doneSince ||= Date.now();
+        const said = r.replyText ? `: “${r.replyText.slice(0, 220)}”` : '';
+        if ((r.refused || r.failed) && donePolls >= 2) throw new Error(`Gemini replied without ${noun}${said || ` — ${r.failText}`}`);
+        if (donePolls >= 2 && Date.now() - doneSince >= grace) throw new Error(`Gemini replied without ${noun}${said}`);
+      } else {
+        donePolls = 0;
+        doneSince = 0;
+      }
+
+      if (elapsed > timeout) {
+        const said = last?.replyText ? ` · Gemini said: “${last.replyText.slice(0, 160)}”` : '';
+        throw new Error(`Timed out after ${s.timeoutSec}s${accepted ? '' : ' — the prompt was not seen on the page'}${said}`);
+      }
+    }
+  }
+
   folder() {
     const s = this.settings;
     return `${sanitizeSegment(s.baseFolder, 'FlowBatch')}/${sanitizeSegment(this.session.projectName, 'Untitled')}`;
   }
 
-  async downloadResults(item) {
+  /** `tabId`: the tab that produced the item, for URLs only it can read. */
+  async downloadResults(item, tabId = this.tabId) {
     const base = item.mentions.length ? item.mentions.join('_') : slug(item.prompt);
     for (let k = 0; k < item.results.length; k++) {
       const res = item.results[k];
@@ -376,9 +516,11 @@ export class Runner {
       try {
         const d = await downloadMedia({
           url: res.url,
+          altUrls: res.altUrls,
           kind: res.kind,
           pathNoExt,
-          readViaPage: (url) => this.call('fetchAsDataUrl', { url }, { timeoutMs: 90000 }),
+          readViaPage: (url) => callAgent(tabId, 'fetchAsDataUrl', { url }, { timeoutMs: 90000 }),
+          viaPage: res.site === 'gemini',
         });
         res.filename = d.filename;
         res.download = 'in_progress';
@@ -398,39 +540,30 @@ export class Runner {
 
   /**
    * Bytes of one generated result, for zipping or re-importing as an asset.
-   * blob:/data: URLs only exist inside the Flow page, so those are read through the tab.
+   * blob:/data: URLs only exist inside the page, so those are read through the tab of the
+   * site that made the result (while a queue runs, that is its pinned tab).
    */
   async resultBlob(res) {
-    if (res.url.startsWith('data:')) return dataUrlToBlob(res.url);
-    if (!res.url.startsWith('blob:')) {
-      try {
-        const r = await fetch(res.url, { credentials: 'include' });
-        if (r.ok) {
-          const blob = await r.blob();
-          if (blob.size && !/text\/html/i.test(blob.type)) return blob;
-        }
-      } catch {
-        /* fall through to the page */
-      }
-    }
-    if (this.tabId == null) {
-      const tab = await findFlowTab({ open: false });
-      if (!tab) throw new Error('Open the Flow tab that produced these results');
-      this.tabId = tab.id;
-    }
-    const { dataUrl } = await this.call('fetchAsDataUrl', { url: res.url }, { timeoutMs: 90000 });
-    return dataUrlToBlob(dataUrl);
+    const site = res.site || 'flow';
+    const readViaPage = async (url) => {
+      const tab = await findSiteTab(site, { open: false });
+      if (!tab) throw new Error(`no ${SITES[site].name} tab`);
+      return callAgent(tab.id, 'fetchAsDataUrl', { url }, { timeoutMs: 90000 });
+    };
+    const blob = await fetchMediaBlob([res.url, ...(res.altUrls || [])], { readViaPage, viaPage: true });
+    if (!blob) throw new Error(`Could not read a result — keep the ${SITES[site].name} tab that produced it open`);
+    return blob;
   }
 
+  /** "Download again" — also works while another queue runs, without touching its tab. */
   async downloadItem(item) {
-    const tab = await findFlowTab({ open: false });
-    if (tab) this.tabId = tab.id;
-    await this.downloadResults(item);
+    const tab = await findSiteTab(item.site || 'flow', { open: false });
+    await this.downloadResults(item, tab?.id ?? null);
   }
 
   async newProject() {
-    const tab = await findFlowTab({ open: true, flowUrl: this.settings.flowUrl });
-    this.tabId = tab.id;
+    const tab = await findSiteTab('flow', { open: true, settings: this.settings });
+    this.useTab('flow', tab.id);
     await chrome.tabs.update(tab.id, { active: true });
     const info = await this.call('ping', {}, { timeoutMs: 15000 });
     if (info.isProject) {
@@ -439,6 +572,13 @@ export class Runner {
       await sleep(2500);
     }
     await this.ensureProject(true);
+  }
+
+  async newChat() {
+    const tab = await findSiteTab('gemini', { open: true, settings: this.settings });
+    this.useTab('gemini', tab.id);
+    await chrome.tabs.update(tab.id, { active: true });
+    await this.openGeminiChat();
   }
 
   eta() {

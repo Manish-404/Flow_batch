@@ -50,24 +50,48 @@ export async function downloadBlobAs(blob, filename) {
   }
 }
 
+const isMedia = (blob) => blob.size > 0 && !/text\/html/i.test(blob.type);
+
 /**
- * Save a generated result from Flow.
- * blob:/data: URLs are read through the page (they only exist there); http(s) URLs are
- * fetched with the extension's host permission so the real MIME type picks the extension.
+ * The bytes behind the first of `urls` that can be read. http(s) URLs are fetched with the
+ * extension's host permission; blob: URLs only exist inside the page, so they — and, with
+ * `viaPage`, any URL the extension cannot read — are fetched by the tab's agent instead.
  */
-export async function downloadMedia({ url, kind, pathNoExt, readViaPage }) {
+export async function fetchMediaBlob(urls, { readViaPage, viaPage = false } = {}) {
+  for (const url of urls.filter(Boolean)) {
+    if (url.startsWith('data:')) return dataUrlToBlob(url);
+    if (!url.startsWith('blob:')) {
+      try {
+        const res = await fetch(url, { credentials: 'include' });
+        const blob = res.ok ? await res.blob() : null;
+        if (blob && isMedia(blob)) return blob;
+      } catch {
+        /* try the next way */
+      }
+    }
+    if (readViaPage && (url.startsWith('blob:') || viaPage)) {
+      try {
+        const blob = await dataUrlToBlob((await readViaPage(url)).dataUrl);
+        if (isMedia(blob)) return blob;
+      } catch {
+        /* try the next URL */
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Save a generated result. `altUrls` are other copies of it (Gemini: the full-size image
+ * first, then the one shown on the page); the first that can be read wins, so the real
+ * MIME type picks the extension. If none can, Chrome downloads the first http(s) URL itself.
+ */
+export async function downloadMedia({ url, altUrls = [], kind, pathNoExt, readViaPage, viaPage = false }) {
   const fallbackExt = kind === 'video' ? 'mp4' : 'png';
-  if (url.startsWith('blob:') || url.startsWith('data:')) {
-    const dataUrl = url.startsWith('data:') ? url : (await readViaPage(url)).dataUrl;
-    return downloadBlob(await dataUrlToBlob(dataUrl), pathNoExt, fallbackExt);
-  }
-  try {
-    const res = await fetch(url, { credentials: 'include' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const blob = await res.blob();
-    if (!blob.size || /text\/html/i.test(blob.type)) throw new Error('not media');
-    return await downloadBlob(blob, pathNoExt, fallbackExt);
-  } catch {
-    return start(url, `${pathNoExt}.${extFromUrl(url, fallbackExt)}`);
-  }
+  const urls = [url, ...altUrls];
+  const blob = await fetchMediaBlob(urls, { readViaPage, viaPage });
+  if (blob) return downloadBlob(blob, pathNoExt, fallbackExt);
+  const direct = urls.find((u) => /^https?:/i.test(u || ''));
+  if (!direct) throw new Error('could not read the file from the page');
+  return start(direct, `${pathNoExt}.${extFromUrl(direct, fallbackExt)}`);
 }

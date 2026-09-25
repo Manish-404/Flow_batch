@@ -4,25 +4,9 @@
   if (window.__flowBatchAgentLoaded) return;
   window.__flowBatchAgentLoaded = true;
   const FB = self.FB;
-  const { $$, sleep, isShown, realClick, labelOf } = FB;
-  const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim();
-
-  async function waitFor(fn, timeoutMs, stepMs = 300) {
-    const t0 = Date.now();
-    for (;;) {
-      const v = await fn();
-      if (v) return v;
-      if (Date.now() - t0 > timeoutMs) return null;
-      await sleep(stepMs);
-    }
-  }
+  const { $$, sleep, isShown, realClick, labelOf, waitFor, norm, describe } = FB;
 
   const isProject = () => /\/project\//i.test(location.pathname);
-
-  function describe(el) {
-    if (!el) return null;
-    return { tag: el.tagName.toLowerCase(), label: labelOf(el).slice(0, 80), selector: FB.uniqueSelector(el) };
-  }
 
   // ---------- settings (mode / aspect ratio / model / outputs) ----------
   function findControlByLabel(labelRe) {
@@ -291,35 +275,13 @@
   }
 
   // ---------- batch uploads ----------
-  // A video is too big for one extension message, so the panel sends it in base64 chunks,
-  // each decoded here as it arrives and assembled into a File when the batch is attached.
-  const staged = new Map(); // key -> { name, type, parts: (Uint8Array|null)[] }
-
-  function stageChunk({ key, index, total, data, name, type }) {
-    let s = staged.get(key);
-    if (!s) staged.set(key, (s = { name, type, parts: Array.from({ length: total }, () => null) }));
-    const bin = atob(data);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    s.parts[index] = bytes;
-    return { received: s.parts.filter(Boolean).length, total };
-  }
-
-  function takeStaged(key) {
-    const s = staged.get(key);
-    if (!s) throw new Error('Upload data went missing — the Flow tab may have reloaded; send again');
-    staged.delete(key);
-    if (s.parts.some((p) => !p)) throw new Error(`Upload data for ${s.name} arrived incomplete; send again`);
-    return new File(s.parts, s.name, { type: s.type });
-  }
-
   /**
-   * Hand every staged file to Flow in one go — all at once when its input takes `multiple`,
-   * otherwise back to back — then watch the page until each one has either shown up or been
-   * rejected by name (e.g. "Unsupported file type: clip_004.webm").
+   * Hand every staged file (FB.stageChunk) to Flow in one go — all at once when its input
+   * takes `multiple`, otherwise back to back — then watch the page until each one has either
+   * shown up or been rejected by name (e.g. "Unsupported file type: clip_004.webm").
    */
   async function attachFiles({ selectors, keys, settleMs = 60000 }) {
-    const files = keys.map(takeStaged);
+    const files = keys.map(FB.takeStaged);
     const box = FB.findPromptBox(selectors);
     if (!box) throw new Error('Prompt box not found on the Flow page');
     const composer = FB.findComposer(box);
@@ -452,19 +414,6 @@
     };
   }
 
-  async function fetchAsDataUrl({ url }) {
-    const res = await fetch(url, { credentials: 'include' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const blob = await res.blob();
-    const dataUrl = await new Promise((resolve, reject) => {
-      const fr = new FileReader();
-      fr.onload = () => resolve(fr.result);
-      fr.onerror = () => reject(fr.error);
-      fr.readAsDataURL(blob);
-    });
-    return { dataUrl, mime: blob.type };
-  }
-
   // ---------- actions ----------
   const actions = {
     ping: ({ selectors }) => ({
@@ -510,12 +459,9 @@
     applySettings,
     clearReferences,
     attachImage,
-    stageChunk,
+    stageChunk: FB.stageChunk,
     attachFiles,
-    dropStaged: ({ keys }) => {
-      (keys || []).forEach((k) => staged.delete(k));
-      return { dropped: true };
-    },
+    dropStaged: FB.dropStaged,
 
     setPrompt: async ({ selectors, text }) => {
       const box = FB.findPromptBox(selectors);
@@ -527,7 +473,7 @@
     snapshot,
     submit,
     poll,
-    fetchAsDataUrl,
+    fetchAsDataUrl: FB.fetchAsDataUrl,
 
     pickElement: async ({ label }) => FB.pickElement(label),
 
@@ -553,17 +499,5 @@
     },
   };
 
-  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-    if (!msg || msg.channel !== 'flowbatch') return undefined;
-    const fn = actions[msg.action];
-    if (!fn) {
-      sendResponse({ ok: false, error: `Unknown action ${msg.action}` });
-      return undefined;
-    }
-    Promise.resolve()
-      .then(() => fn(msg.payload || {}))
-      .then((data) => sendResponse({ ok: true, data }))
-      .catch((err) => sendResponse({ ok: false, error: err?.message || String(err) }));
-    return true;
-  });
+  FB.serve(actions);
 })();

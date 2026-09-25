@@ -1,12 +1,22 @@
-// FlowBatch — DOM helpers and element finders for the Google Flow page (isolated world).
-// Flow's markup changes often, so every finder is heuristic, and each can be overridden
-// with a CSS selector picked in Settings -> Flow elements.
+// FlowBatch — DOM helpers and element finders shared by the Flow and Gemini agents
+// (isolated world). Both sites change their markup often, so every finder is heuristic, and
+// each can be overridden with a CSS selector picked in Settings -> Flow / Gemini elements.
 (() => {
   if (self.FB) return;
   const FB = (self.FB = {});
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   FB.sleep = sleep;
+
+  FB.waitFor = async (fn, timeoutMs, stepMs = 300) => {
+    const t0 = Date.now();
+    for (;;) {
+      const v = await fn();
+      if (v) return v;
+      if (Date.now() - t0 > timeoutMs) return null;
+      await sleep(stepMs);
+    }
+  };
 
   const OWN = '[id^="__flowbatch"]';
 
@@ -51,6 +61,7 @@
   FB.isShown = isShown;
 
   const isOwn = (el) => !!el.closest?.(OWN);
+  FB.isOwn = isOwn;
   const isDisabled = (el) => !!(el.disabled || el.getAttribute('aria-disabled') === 'true');
   FB.isDisabled = isDisabled;
 
@@ -121,6 +132,7 @@
   FB.getText = getText;
 
   const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+  FB.norm = norm;
 
   async function setText(el, text) {
     el.focus();
@@ -219,6 +231,7 @@
 
   const clickables = (root) =>
     $$('button, [role="button"], a[role="menuitem"], [role="menuitem"]', root).filter((b) => isShown(b) && !isOwn(b));
+  FB.clickables = clickables;
 
   function findSubmitButton(sel, box) {
     const custom = customEl(sel?.submitButton);
@@ -424,6 +437,7 @@
       if (!url || url.startsWith('chrome-extension:')) continue;
       const r = el.getBoundingClientRect();
       items.push({
+        el,
         key: mediaKey(url),
         url,
         kind: isImg ? 'image' : 'video',
@@ -480,13 +494,13 @@
 
   // Upload rejections, e.g. "Unsupported file type: clip_004.webm (supported extensions are …)".
   const UPLOAD_FAIL =
-    /(unsupported file|file type|not supported|too large|too big|exceeds|maximum (file )?size|upload(ing)? failed|failed to upload|couldn['’]t upload|could not upload|unable to upload)/i;
+    /(unsupported file|file type|not supported|too large|too big|exceeds|maximum (file )?size|upload(ing)? failed|failed to upload|(couldn['’]t|could not|can['’]t|cannot|unable to) upload|up to \d+ files|file limit)/i;
 
-  /** Every visible text node matching `re` (scanText only counts them). */
-  FB.collectText = (re, maxLen = 300) => {
+  /** Every visible text node matching `re` (scanText only counts them), within `root`. */
+  FB.collectText = (re, maxLen = 300, root = document.body) => {
     const out = [];
-    if (!document.body) return out;
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    if (!root) return out;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       const t = norm(node.nodeValue);
       if (!t || t.length > maxLen || !re.test(t)) continue;
@@ -661,4 +675,64 @@
       document.addEventListener('click', click, true);
       document.addEventListener('keydown', key, true);
     });
+
+  // ---------- agent plumbing shared by flow-agent.js and gemini-agent.js ----------
+  FB.describe = (el) => (el ? { tag: el.tagName.toLowerCase(), label: labelOf(el).slice(0, 80), selector: uniqueSelector(el) } : null);
+
+  // A video is too big for one extension message, so the panel sends it in base64 chunks,
+  // each decoded here as it arrives and assembled into a File when the batch is attached.
+  const staged = new Map(); // key -> { name, type, parts: (Uint8Array|null)[] }
+
+  FB.stageChunk = ({ key, index, total, data, name, type }) => {
+    let s = staged.get(key);
+    if (!s) staged.set(key, (s = { name, type, parts: Array.from({ length: total }, () => null) }));
+    const bin = atob(data);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    s.parts[index] = bytes;
+    return { received: s.parts.filter(Boolean).length, total };
+  };
+
+  FB.takeStaged = (key) => {
+    const s = staged.get(key);
+    if (!s) throw new Error('Upload data went missing — the tab may have reloaded; send again');
+    staged.delete(key);
+    if (s.parts.some((p) => !p)) throw new Error(`Upload data for ${s.name} arrived incomplete; send again`);
+    return new File(s.parts, s.name, { type: s.type });
+  };
+
+  FB.dropStaged = ({ keys }) => {
+    (keys || []).forEach((k) => staged.delete(k));
+    return { dropped: true };
+  };
+
+  FB.fetchAsDataUrl = async ({ url }) => {
+    const res = await fetch(url, { credentials: 'include' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const dataUrl = await new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(fr.result);
+      fr.onerror = () => reject(fr.error);
+      fr.readAsDataURL(blob);
+    });
+    return { dataUrl, mime: blob.type };
+  };
+
+  /** Answer the side panel's { channel: 'flowbatch', action, payload } messages. */
+  FB.serve = (actions) => {
+    chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+      if (!msg || msg.channel !== 'flowbatch') return undefined;
+      const fn = actions[msg.action];
+      if (!fn) {
+        sendResponse({ ok: false, error: `Unknown action ${msg.action}` });
+        return undefined;
+      }
+      Promise.resolve()
+        .then(() => fn(msg.payload || {}))
+        .then((data) => sendResponse({ ok: true, data }))
+        .catch((err) => sendResponse({ ok: false, error: err?.message || String(err) }));
+      return true;
+    });
+  };
 })();
