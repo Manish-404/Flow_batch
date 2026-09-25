@@ -8,3 +8,6 @@
 *.md   text eol=lf
 
 *.png binary
+
+# Leave the website and its media out of GitHub's "Download ZIP", so the download is just the extension
+/docs export-ignore

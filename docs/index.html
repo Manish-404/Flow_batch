@@ -1,0 +1,1284 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FlowBatch · Bulk prompts for Google Flow and Gemini</title>
+  <meta name="description" content="FlowBatch is a free Chrome side-panel extension that runs a queue of prompts in Google Flow or Gemini. It attaches the images each prompt mentions, waits for every result and downloads it. It can also extract frames, split video and prepare posts.">
+  <link rel="canonical" href="https://manish-404.github.io/Flow_batch/">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fbfbfc">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0b0e">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icon-32.png">
+  <link rel="icon" type="image/png" sizes="128x128" href="assets/icon-128.png">
+  <link rel="apple-touch-icon" href="assets/icon-128.png">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="FlowBatch">
+  <meta property="og:title" content="FlowBatch · Press Start. Walk away.">
+  <meta property="og:description" content="A free Chrome extension that runs your prompts in Google Flow or Gemini one by one, attaches the images each prompt mentions, and downloads every result.">
+  <meta property="og:url" content="https://manish-404.github.io/Flow_batch/">
+  <meta property="og:image" content="https://manish-404.github.io/Flow_batch/media/flowbatch-promo.jpg">
+  <meta property="og:image:width" content="1920">
+  <meta property="og:image:height" content="1080">
+  <meta property="og:image:alt" content="Press Start. Walk away. FlowBatch's work queue in the middle of a run.">
+  <meta name="twitter:card" content="summary_large_image">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "FlowBatch",
+    "applicationCategory": "BrowserApplication",
+    "operatingSystem": "Windows, macOS, Linux, ChromeOS",
+    "description": "A Chrome side-panel extension that runs a queue of prompts in Google Flow or Gemini, attaches reference images, waits for each result and downloads it.",
+    "url": "https://manish-404.github.io/Flow_batch/",
+    "downloadUrl": "https://github.com/Manish-404/Flow_batch/archive/refs/heads/main.zip",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+  }
+  </script>
+  <style>
+    :root {
+      --bg: #fbfbfc;
+      --bg-alt: #f4f4f7;
+      --card: #ffffff;
+      --border: #e7e7ec;
+      --border-strong: #d4d4dc;
+      --text: #17171c;
+      --muted: #5d5d6b;
+      --faint: #8b8b98;
+      --accent: #6d5efc;
+      --accent-text: #5344e0;
+      --accent-soft: rgba(109, 94, 252, 0.1);
+      --accent-line: rgba(109, 94, 252, 0.35);
+      --btn: #5b4cf0;
+      --btn-hover: #4c3de0;
+      --hover: rgba(23, 23, 28, 0.05);
+      --glow-a: rgba(109, 94, 252, 0.16);
+      --glow-b: rgba(56, 132, 246, 0.1);
+      --shadow: 0 1px 2px rgba(23, 23, 28, 0.05), 0 8px 24px -12px rgba(23, 23, 28, 0.12);
+      --shadow-lg: 0 1px 2px rgba(23, 23, 28, 0.06), 0 30px 60px -24px rgba(23, 23, 28, 0.28);
+      --code-bg: #f1f1f5;
+      /* The panel's own light theme, for the mock-ups */
+      --p-bg: #f5f5f7;
+      --p-card: #ffffff;
+      --p-card-2: #f7f7f9;
+      --p-field: #ececf0;
+      --p-border: #e6e6eb;
+      --ok: #15803d;
+      --ok-fill: #16a34a;
+      --ok-soft: rgba(22, 163, 74, 0.12);
+      --warn: #b45309;
+      --warn-soft: rgba(245, 158, 11, 0.14);
+      --bad: #e11d48;
+      --bad-soft: rgba(225, 29, 72, 0.09);
+      --sep-bg: rgba(20, 184, 166, 0.14);
+      --sep-text: #0f766e;
+      /* Screenshots are of the dark panel in both themes */
+      --shot-bg: #0e0f13;
+      --shot-border: #25262e;
+      --radius: 16px;
+      --maxw: 1160px;
+      --gutter: 24px;
+      --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+      --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0a0b0e;
+        --bg-alt: #0e0f13;
+        --card: #131419;
+        --border: #20212a;
+        --border-strong: #2f303a;
+        --text: #ececf1;
+        --muted: #9a9cab;
+        --faint: #6f7180;
+        --accent: #7c6ff7;
+        --accent-text: #a99fff;
+        --accent-soft: rgba(124, 111, 247, 0.15);
+        --accent-line: rgba(124, 111, 247, 0.45);
+        --btn: #5b4cf0;
+        --btn-hover: #6a5cf6;
+        --hover: rgba(255, 255, 255, 0.06);
+        --glow-a: rgba(124, 111, 247, 0.22);
+        --glow-b: rgba(56, 132, 246, 0.12);
+        --shadow: 0 10px 30px -14px rgba(0, 0, 0, 0.6);
+        --shadow-lg: 0 40px 80px -30px rgba(0, 0, 0, 0.8);
+        --code-bg: #1a1b21;
+        --p-bg: #0e0f13;
+        --p-card: #16171c;
+        --p-card-2: #1c1d23;
+        --p-field: #1f2027;
+        --p-border: #25262e;
+        --ok: #34d399;
+        --ok-soft: rgba(52, 211, 153, 0.14);
+        --warn: #fbbf24;
+        --warn-soft: rgba(251, 191, 36, 0.13);
+        --bad: #fb7185;
+        --bad-soft: rgba(251, 113, 133, 0.12);
+        --sep-bg: rgba(45, 212, 191, 0.16);
+        --sep-text: #5eead4;
+        color-scheme: dark;
+      }
+    }
+    @media (max-width: 600px) {
+      :root { --gutter: 16px; }
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; scroll-padding-top: 80px; }
+    html:has(dialog[open]) { overflow: hidden; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 400 17px/1.6 var(--font);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    img, video, svg { max-width: 100%; }
+    a { color: var(--accent-text); text-underline-offset: 3px; }
+    h1, h2, h3 { text-wrap: balance; }
+    p, li, dd { text-wrap: pretty; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+    code {
+      font-family: var(--mono);
+      font-size: 0.86em;
+      padding: 0.12em 0.42em;
+      border-radius: 6px;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      overflow-wrap: anywhere;
+    }
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+    }
+    .skip {
+      position: absolute; left: 16px; top: -60px; z-index: 100;
+      padding: 10px 16px; border-radius: 10px; background: var(--btn); color: #fff; font-weight: 600;
+    }
+    .skip:focus { top: 12px; }
+    .wrap { width: min(100% - 2 * var(--gutter), var(--maxw)); margin-inline: auto; }
+    .i {
+      width: 20px; height: 20px; flex: none;
+      fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+    }
+    .i-fill { fill: currentColor; stroke: none; }
+
+    /* ---------- buttons ---------- */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+      min-height: 48px; padding: 0 22px; border-radius: 12px; border: 1px solid transparent;
+      font: 600 16px/1 var(--font); text-decoration: none; white-space: nowrap; cursor: pointer;
+      transition: background-color 0.15s, border-color 0.15s, transform 0.15s;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary {
+      background: var(--btn); color: #fff;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 10px 28px -12px rgba(91, 76, 240, 0.9);
+    }
+    .btn-primary:hover { background: var(--btn-hover); }
+    .btn-ghost { background: var(--card); color: var(--text); border-color: var(--border-strong); }
+    .btn-ghost:hover { border-color: var(--faint); }
+    .btn-sm { min-height: 38px; padding: 0 14px; font-size: 14.5px; border-radius: 10px; }
+    .btn .i { width: 19px; height: 19px; }
+    @media (max-width: 480px) {
+      .cta .btn { flex: 1 1 100%; }
+    }
+    @media (max-width: 400px) {
+      .btn { max-width: 100%; padding-block: 12px; white-space: normal; line-height: 1.25; text-align: center; }
+    }
+
+    /* ---------- header ---------- */
+    .site-head {
+      position: sticky; top: 0; z-index: 50;
+      background: var(--bg);
+      background: color-mix(in srgb, var(--bg) 80%, transparent);
+      -webkit-backdrop-filter: saturate(1.5) blur(14px);
+      backdrop-filter: saturate(1.5) blur(14px);
+      border-bottom: 1px solid var(--border);
+    }
+    .head-inner { display: flex; align-items: center; gap: 20px; height: 64px; }
+    .brand {
+      display: inline-flex; align-items: center; gap: 10px;
+      color: var(--text); text-decoration: none; font-weight: 700; font-size: 17px; letter-spacing: -0.01em;
+    }
+    .brand img { width: 28px; height: 28px; border-radius: 7px; }
+    .nav { display: flex; gap: 2px; margin-left: 8px; }
+    .nav a {
+      padding: 8px 12px; border-radius: 8px;
+      color: var(--muted); text-decoration: none; font-size: 15px; font-weight: 500;
+    }
+    .nav a:hover { color: var(--text); background: var(--hover); }
+    .head-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+    .icon-link {
+      display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px; border-radius: 10px;
+      color: var(--muted); text-decoration: none; font-size: 15px; font-weight: 500;
+    }
+    .icon-link:hover { color: var(--text); background: var(--hover); }
+    @media (max-width: 860px) { .nav { display: none; } }
+    @media (max-width: 480px) { .icon-link span { display: none; } }
+
+    /* ---------- sections ---------- */
+    .section { padding: 104px 0; }
+    .band { background: var(--bg-alt); border-block: 1px solid var(--border); }
+    @media (max-width: 700px) { .section { padding: 72px 0; } }
+    .section-head { max-width: 720px; margin-bottom: 52px; }
+    .section-head.center { margin-inline: auto; text-align: center; }
+    .kicker {
+      margin: 0 0 12px; color: var(--accent-text);
+      font-size: 13.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+    }
+    h2 {
+      margin: 0; font-size: clamp(2rem, 4.4vw, 3.05rem); line-height: 1.08; letter-spacing: -0.035em; font-weight: 700;
+    }
+    .sub { margin: 16px 0 0; color: var(--muted); font-size: 1.12rem; }
+
+    /* ---------- hero ---------- */
+    .hero { position: relative; padding: 76px 0 96px; overflow: hidden; overflow: clip; }
+    .hero::before {
+      content: ""; position: absolute; inset: -120px 0 auto; height: 900px; pointer-events: none;
+      background:
+        radial-gradient(560px 380px at 78% 42%, var(--glow-a), transparent 70%),
+        radial-gradient(520px 340px at 12% 18%, var(--glow-b), transparent 70%);
+    }
+    .hero-grid {
+      position: relative; display: grid; align-items: center; gap: 56px;
+      grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+    }
+    @media (max-width: 980px) {
+      .hero { padding: 56px 0 80px; }
+      .hero-grid { grid-template-columns: minmax(0, 1fr); gap: 52px; }
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 9px; margin: 0 0 24px; padding: 6px 14px 6px 11px;
+      border: 1px solid var(--border); border-radius: 999px; background: var(--card);
+      color: var(--muted); font-size: 14px; font-weight: 500;
+    }
+    .eyebrow i {
+      width: 8px; height: 8px; border-radius: 50%; flex: none;
+      background: var(--ok-fill); box-shadow: 0 0 0 3px var(--ok-soft);
+    }
+    @media (max-width: 420px) {
+      .eyebrow { border-radius: 14px; font-size: 13px; }
+    }
+    h1 {
+      margin: 0; font-size: clamp(3rem, 7.4vw, 5.4rem); line-height: 0.98; letter-spacing: -0.045em; font-weight: 800;
+    }
+    h1 .accent { color: var(--accent-text); }
+    .lead { margin: 26px 0 0; max-width: 33em; color: var(--muted); font-size: clamp(1.08rem, 1.6vw, 1.22rem); }
+    .lead b { color: var(--text); font-weight: 600; }
+    .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 34px; }
+    .fine { margin: 18px 0 0; color: var(--muted); font-size: 14.5px; }
+    .fine a { color: inherit; }
+
+    /* the queue mock-up */
+    .mock-stack { position: relative; width: 100%; max-width: 500px; margin-inline: auto; }
+    .mock {
+      position: relative; padding: 14px; border-radius: 20px; font-size: 14px;
+      background: var(--p-bg); border: 1px solid var(--p-border); box-shadow: var(--shadow-lg);
+    }
+    .m-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+    .m-seg {
+      display: inline-flex; flex: none; padding: 3px; border-radius: 10px;
+      background: var(--p-field); font-size: 13px; font-weight: 600;
+    }
+    .m-seg span { padding: 6px 12px; border-radius: 8px; color: var(--muted); }
+    .m-seg .on { background: var(--p-card); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14); }
+    .m-conn {
+      display: inline-flex; align-items: center; gap: 8px; min-width: 0;
+      color: var(--muted); font-size: 12.5px; white-space: nowrap;
+    }
+    .m-conn i { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--ok-fill); box-shadow: 0 0 0 3px var(--ok-soft); }
+    .m-conn span { overflow: hidden; text-overflow: ellipsis; }
+    .m-card, .m-dock { padding: 14px; border-radius: 14px; background: var(--p-card); border: 1px solid var(--p-border); }
+    .m-dock { margin-top: 10px; }
+    .m-head { display: flex; align-items: center; justify-content: space-between; margin: 2px 2px 12px; }
+    .m-head b { font-size: 15px; }
+    .m-badge {
+      display: grid; place-items: center; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 999px;
+      background: var(--accent-soft); color: var(--accent-text); font-size: 12.5px; font-weight: 700;
+    }
+    .m-rows { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+    .q-row {
+      display: grid; grid-template-columns: 22px 38px minmax(0, 1fr) 22px; align-items: center; gap: 10px;
+      padding: 10px 10px 10px 12px; border-radius: 10px; border: 1px solid transparent; background: var(--p-card-2);
+      transition: background-color 0.35s, border-color 0.35s;
+    }
+    .q-n { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+    .q-tag {
+      display: grid; place-items: center; height: 20px; border-radius: 6px;
+      background: var(--p-field); color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+    }
+    .q-txt { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .q-txt i { font-style: normal; color: var(--accent-text); }
+    .q-st { display: grid; place-items: center; width: 22px; height: 22px; }
+    .q-st::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--muted); opacity: 0.55; }
+    .q-row.run { background: var(--accent-soft); border-color: var(--accent-line); }
+    .q-row.run .q-st::before {
+      width: 15px; height: 15px; opacity: 1; background: none;
+      border: 2px solid var(--accent-line); border-top-color: var(--accent);
+      animation: spin 0.8s linear infinite;
+    }
+    .q-row.done .q-st::before {
+      width: 20px; height: 20px; opacity: 1;
+      background: var(--ok-fill) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 12.5 4 4 8-9'/%3E%3C/svg%3E") center / 12px no-repeat;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .q-bar { height: 4px; border-radius: 99px; background: var(--p-field); overflow: hidden; }
+    .q-bar > span { display: block; width: 25%; height: 100%; border-radius: inherit; background: var(--accent); transition: width 0.6s ease; }
+    .q-line {
+      display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 10px 0 12px;
+      color: var(--muted); font-size: 13px;
+    }
+    .q-line b { color: var(--text); font-size: 14px; white-space: nowrap; }
+    .q-line span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .q-btns { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 8px; }
+    .q-btns > span {
+      display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 36px; border-radius: 10px;
+      font-size: 13.5px; font-weight: 600; transition: opacity 0.3s;
+    }
+    .q-btns .i { width: 12px; height: 12px; }
+    .b-run { background: var(--btn); color: #fff; opacity: 0.72; }
+    .b-pause { background: var(--warn-soft); color: var(--warn); }
+    .b-stop { background: var(--bad-soft); color: var(--bad); }
+    .finished .b-run { opacity: 1; }
+    .finished .b-pause, .finished .b-stop { opacity: 0.4; }
+
+    /* downloaded files (hero and "how it works") */
+    .files {
+      padding: 14px 16px; border-radius: 16px;
+      background: var(--p-card); border: 1px solid var(--p-border);
+    }
+    .mock-stack .files { position: relative; width: min(310px, 82%); margin: 14px -28px 0 auto; box-shadow: var(--shadow-lg); }
+    @media (max-width: 1180px) { .mock-stack .files { margin-right: 0; } }
+    .files-path { margin-bottom: 10px; overflow: hidden; color: var(--muted); font-size: 12.5px; white-space: nowrap; text-overflow: ellipsis; }
+    .files-path b { color: var(--text); font-weight: 600; }
+    .files ul { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+    .files li {
+      display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 10px;
+      color: var(--text); font: 13.5px/1.3 var(--mono);
+    }
+    .files li > span:nth-child(2) { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .files .st { color: var(--ok); font: 600 12px/1 var(--font); }
+    .files .st::after { content: "saved"; }
+    .mock-stack .files li { color: var(--faint); transition: color 0.3s; }
+    .mock-stack .files li .sw { opacity: 0.3; transition: opacity 0.3s; }
+    .mock-stack .files li .st { color: var(--faint); font-weight: 500; }
+    .mock-stack .files li .st::after { content: "waiting"; }
+    .mock-stack .files li.saved { color: var(--text); }
+    .mock-stack .files li.saved .sw { opacity: 1; }
+    .mock-stack .files li.saved .st { color: var(--ok); font-weight: 600; }
+    .mock-stack .files li.saved .st::after { content: "saved"; }
+    .sw { width: 22px; height: 22px; border-radius: 6px; }
+    .s1 { background: radial-gradient(circle at 72% 32%, rgba(255, 255, 255, 0.32) 0 24%, transparent 25%), linear-gradient(135deg, #2466a8, #1d2b6e); }
+    .s2 { background: radial-gradient(circle at 72% 32%, rgba(255, 255, 255, 0.32) 0 24%, transparent 25%), linear-gradient(135deg, #3b30a6, #291e6b); }
+    .s3 { background: radial-gradient(circle at 72% 32%, rgba(255, 255, 255, 0.32) 0 24%, transparent 25%), linear-gradient(135deg, #6c2aa6, #3e1a6e); }
+    .s4 { background: radial-gradient(circle at 72% 32%, rgba(255, 255, 255, 0.32) 0 24%, transparent 25%), linear-gradient(135deg, #a52a82, #5c1a4f); }
+
+    /* ---------- watch ---------- */
+    .video-card {
+      overflow: hidden; border-radius: 22px; background: #000;
+      border: 1px solid var(--border); box-shadow: var(--shadow-lg);
+    }
+    .video-card video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; background: #0a0b0e; }
+    .video-cap { margin: 18px auto 0; max-width: 46em; color: var(--muted); font-size: 15px; text-align: center; }
+
+    /* ---------- how it works ---------- */
+    .how-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 64px; align-items: center; }
+    @media (max-width: 940px) { .how-grid { grid-template-columns: minmax(0, 1fr); gap: 44px; } }
+    .steps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 30px; margin: 0; padding: 0; list-style: none; }
+    .steps li { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 18px; }
+    .step-n {
+      display: grid; place-items: center; width: 44px; height: 44px; border-radius: 13px;
+      background: var(--card); border: 1px solid var(--border-strong); color: var(--accent-text);
+      font-weight: 700; font-size: 17px; box-shadow: var(--shadow);
+    }
+    .steps h3 { margin: 6px 0 6px; font-size: 1.22rem; letter-spacing: -0.015em; }
+    .steps p { margin: 0; color: var(--muted); }
+    .ed { margin: 0; overflow: hidden; border-radius: 16px; background: var(--p-card); border: 1px solid var(--p-border); box-shadow: var(--shadow); }
+    .ed-head { display: flex; justify-content: space-between; gap: 12px; padding: 14px 18px 0; color: var(--muted); font-size: 14px; }
+    .ed-head b { color: var(--text); }
+    .ed-body {
+      margin: 12px; padding: 14px 16px; border-radius: 12px; background: var(--p-card-2);
+      color: var(--text); font: 15px/1.75 var(--font); white-space: pre-wrap; overflow-wrap: anywhere;
+    }
+    .mention { padding: 1px 3px; border-radius: 5px; background: var(--accent-soft); color: var(--accent-text); }
+    .sep { padding: 1px 4px; border-radius: 5px; background: var(--sep-bg); color: var(--sep-text); font-weight: 600; }
+    .how-arrow { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 16px 0; }
+    .how-arrow::before, .how-arrow::after { content: ""; flex: 0 1 72px; height: 1px; background: var(--border-strong); }
+    .how-arrow span {
+      display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px;
+      background: var(--btn); color: #fff; font-size: 14px; font-weight: 600;
+    }
+    .how-arrow .i { width: 12px; height: 12px; }
+
+    /* ---------- features ---------- */
+    .feature {
+      display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 72px; align-items: center;
+      padding: 60px 0; border-top: 1px solid var(--border);
+    }
+    .feature:first-of-type { padding-top: 8px; border-top: 0; }
+    .feature:last-of-type { padding-bottom: 0; }
+    .feature:nth-of-type(even) .feature-copy { order: 2; }
+    @media (max-width: 900px) {
+      .feature { grid-template-columns: minmax(0, 1fr); gap: 32px; padding: 48px 0; }
+      .feature:nth-of-type(even) .feature-copy { order: 0; }
+    }
+    .f-kicker { margin: 0 0 10px; color: var(--accent-text); font-size: 14.5px; font-weight: 600; }
+    .feature h3 { margin: 0 0 14px; font-size: clamp(1.6rem, 2.8vw, 2.15rem); line-height: 1.12; letter-spacing: -0.03em; }
+    .feature-copy > p { margin: 0; color: var(--muted); }
+    .ticks { display: grid; gap: 11px; margin: 22px 0 0; padding: 0; list-style: none; }
+    .ticks li { position: relative; padding-left: 30px; }
+    .ticks li::before {
+      content: ""; position: absolute; left: 0; top: 0.2em; width: 20px; height: 20px; border-radius: 50%;
+      background: var(--accent-soft) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c6ff7' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 12.5 4 4 8-9'/%3E%3C/svg%3E") center / 11px no-repeat;
+    }
+    .feature-shot { width: 100%; max-width: 440px; margin-inline: auto; }
+    .shot {
+      position: relative; display: block; overflow: hidden; border-radius: 18px;
+      background: var(--shot-bg); border: 1px solid var(--shot-border); box-shadow: var(--shadow-lg);
+    }
+    .shot img { display: block; width: 100%; height: auto; margin-top: calc(var(--crop, 0%) * -1); }
+    .shot.tall { aspect-ratio: 10 / 13; }
+    .shot.tall::after, .shot.fade::after {
+      content: ""; position: absolute; inset: auto 0 0; height: 30%; pointer-events: none;
+      background: linear-gradient(rgba(14, 15, 19, 0), var(--shot-bg) 92%);
+    }
+    .zoom {
+      position: absolute; right: 12px; bottom: 12px; z-index: 1;
+      display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: 999px;
+      background: rgba(10, 11, 14, 0.78); border: 1px solid rgba(255, 255, 255, 0.14);
+      color: #ececf1; font-size: 13px; font-weight: 600; transition: background-color 0.15s;
+    }
+    .zoom .i { width: 14px; height: 14px; }
+    .shot:hover .zoom, .shot:focus-visible .zoom, .g:hover .zoom, .g:focus-visible .zoom { background: #5b4cf0; }
+    /* With a mouse the badge appears on hover, so it never sits over the screenshot's text */
+    @media (hover: hover) {
+      .zoom { opacity: 0; transition: opacity 0.15s, background-color 0.15s; }
+      .shot:hover .zoom, .shot:focus-visible .zoom, .g:hover .zoom, .g:focus-visible .zoom { opacity: 1; }
+    }
+
+    /* ---------- details grid ---------- */
+    .d-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    @media (max-width: 940px) { .d-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 600px) { .d-grid { grid-template-columns: minmax(0, 1fr); } }
+    .d-card, .p-card {
+      padding: 24px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--border); box-shadow: var(--shadow);
+    }
+    .ic {
+      display: grid; place-items: center; width: 42px; height: 42px; margin-bottom: 16px; border-radius: 12px;
+      background: var(--accent-soft); color: var(--accent-text);
+    }
+    .d-card h3, .p-card h3 { margin: 0 0 6px; font-size: 1.1rem; letter-spacing: -0.01em; }
+    .d-card p, .p-card p { margin: 0; color: var(--muted); font-size: 15.5px; }
+
+    /* ---------- screens strip ---------- */
+    .strip-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 36px; }
+    .strip-head .section-head { margin-bottom: 0; }
+    .strip-nav { display: flex; gap: 8px; flex: none; }
+    .round {
+      display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; cursor: pointer;
+      background: var(--card); border: 1px solid var(--border-strong); color: var(--text);
+    }
+    .round:hover { border-color: var(--faint); }
+    .round:disabled { opacity: 0.35; cursor: default; }
+    @media (max-width: 700px) { .strip-nav { display: none; } }
+    .strip {
+      --edge: max(var(--gutter), calc((100% - var(--maxw)) / 2));
+      display: flex; gap: 18px; overflow-x: auto; overscroll-behavior-x: contain;
+      padding: 6px var(--edge) 28px; scroll-padding-inline: var(--edge); scroll-snap-type: x mandatory;
+      scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent;
+    }
+    .g { flex: 0 0 auto; width: 250px; scroll-snap-align: start; color: var(--text); text-decoration: none; }
+    @media (max-width: 480px) { .g { width: 72vw; } }
+    .g-frame {
+      position: relative; display: block; overflow: hidden; aspect-ratio: 3 / 4; border-radius: 14px;
+      background: var(--shot-bg); border: 1px solid var(--shot-border); transition: border-color 0.2s, transform 0.2s;
+    }
+    .g-frame img { display: block; width: 100%; height: auto; margin-top: calc(var(--crop, 0%) * -1); }
+    .g-frame .zoom { right: 10px; bottom: 10px; padding: 7px; }
+    .g:hover .g-frame { border-color: var(--accent-line); transform: translateY(-3px); }
+    .g-cap { display: block; margin-top: 12px; color: var(--muted); font-size: 14px; line-height: 1.45; }
+    .g-cap b { display: block; margin-bottom: 2px; color: var(--text); font-size: 15px; }
+    .strip-note { margin-top: 4px; color: var(--muted); font-size: 14px; }
+
+    /* ---------- install ---------- */
+    .install-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.7fr); gap: 28px; align-items: start; }
+    @media (max-width: 940px) { .install-grid { grid-template-columns: minmax(0, 1fr); } }
+    .i-steps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin: 0; padding: 0; list-style: none; counter-reset: st; }
+    .i-steps > li {
+      position: relative; padding: 22px 24px 22px 76px; border-radius: var(--radius);
+      background: var(--card); border: 1px solid var(--border); box-shadow: var(--shadow);
+    }
+    .i-steps > li::before {
+      counter-increment: st; content: counter(st);
+      position: absolute; left: 24px; top: 21px; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px;
+      background: var(--accent-soft); color: var(--accent-text); font-weight: 700; font-size: 15px;
+    }
+    @media (max-width: 480px) {
+      .i-steps > li { padding: 20px 18px 20px 62px; }
+      .i-steps > li::before { left: 16px; top: 19px; }
+    }
+    .i-steps h3 { margin: 4px 0 6px; font-size: 1.12rem; letter-spacing: -0.01em; }
+    .i-steps p { margin: 0; color: var(--muted); }
+    .i-steps p + p { margin-top: 8px; }
+    .i-steps .btn { margin-top: 16px; }
+    .copyline { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; vertical-align: middle; }
+    .copy {
+      display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 8px; cursor: pointer;
+      background: var(--card); border: 1px solid var(--border-strong); color: var(--text); font: 600 13px/1 var(--font);
+    }
+    .copy:hover { border-color: var(--faint); }
+    .copy .i { width: 14px; height: 14px; }
+    .aside { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    .aside-card { padding: 22px 24px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--border); }
+    .aside-card h3 { margin: 0 0 6px; font-size: 1.02rem; }
+    .aside-card p { margin: 0; color: var(--muted); font-size: 15px; }
+    .cmd {
+      margin: 12px 0 0; padding: 12px 14px; overflow-x: auto; border-radius: 10px;
+      background: var(--code-bg); border: 1px solid var(--border); font: 13px/1.6 var(--mono);
+      white-space: pre-wrap; overflow-wrap: anywhere;
+    }
+
+    /* ---------- privacy ---------- */
+    .p-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    @media (max-width: 760px) { .p-grid { grid-template-columns: minmax(0, 1fr); } }
+    .perms {
+      margin-top: 16px; padding: 4px 24px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--border);
+    }
+    .perms summary { position: relative; padding: 16px 36px 16px 0; font-weight: 600; cursor: pointer; list-style: none; }
+    .perms summary::-webkit-details-marker { display: none; }
+    .perms summary::after, .faq summary::after {
+      content: ""; position: absolute; right: 8px; top: 50%; width: 9px; height: 9px;
+      border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+      transform: translateY(-70%) rotate(45deg); transition: transform 0.2s;
+    }
+    .perms[open] summary::after, .faq details[open] summary::after { transform: translateY(-25%) rotate(225deg); }
+    .perms dl { display: grid; grid-template-columns: minmax(0, 15em) minmax(0, 1fr); gap: 12px 28px; margin: 4px 0 22px; }
+    .perms dt { font-weight: 600; font-size: 15.5px; }
+    .perms dd { margin: 0; color: var(--muted); font-size: 15.5px; }
+    @media (max-width: 700px) {
+      .perms dl { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+      .perms dd { margin-bottom: 12px; }
+    }
+    .p-note { margin: 18px 0 0; color: var(--muted); font-size: 14.5px; }
+
+    /* ---------- faq ---------- */
+    .faq { max-width: 820px; margin-inline: auto; }
+    .faq details { border-bottom: 1px solid var(--border); }
+    .faq details:first-of-type { border-top: 1px solid var(--border); }
+    .faq summary {
+      position: relative; padding: 22px 44px 22px 0; cursor: pointer; list-style: none;
+      font-size: 1.1rem; font-weight: 600; letter-spacing: -0.01em;
+    }
+    .faq summary::-webkit-details-marker { display: none; }
+    .faq details > p { margin: -6px 0 24px; max-width: 62em; color: var(--muted); }
+
+    /* ---------- closing call to action ---------- */
+    .closing { position: relative; overflow: hidden; overflow: clip; padding: 112px 0; text-align: center; }
+    .closing::before {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      background: radial-gradient(620px 300px at 50% 60%, var(--glow-a), transparent 70%);
+    }
+    .closing .wrap { position: relative; }
+    .closing p { margin: 16px auto 0; max-width: 34em; color: var(--muted); font-size: 1.12rem; }
+    .closing .cta { justify-content: center; }
+
+    /* ---------- footer ---------- */
+    .site-foot { padding: 44px 0 52px; border-top: 1px solid var(--border); background: var(--bg-alt); }
+    .foot-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px 40px; }
+    .foot-brand { display: flex; align-items: center; gap: 12px; }
+    .foot-brand img { width: 34px; height: 34px; border-radius: 8px; }
+    .foot-brand p { margin: 0; color: var(--muted); font-size: 14.5px; }
+    .foot-links { display: flex; flex-wrap: wrap; gap: 6px 22px; }
+    .foot-links a { color: var(--muted); font-size: 15px; text-decoration: none; }
+    .foot-links a:hover { color: var(--text); text-decoration: underline; }
+    .legal { margin: 28px 0 0; max-width: 60em; color: var(--muted); font-size: 13.5px; }
+
+    /* ---------- lightbox ---------- */
+    .lightbox {
+      width: min(900px, 100vw - 24px); max-width: none; max-height: calc(100vh - 24px); padding: 0; overflow: hidden;
+      border: 1px solid var(--shot-border); border-radius: 18px; background: var(--shot-bg); color: #ececf1;
+      box-shadow: 0 40px 100px -20px rgba(0, 0, 0, 0.7);
+    }
+    .lightbox[open] { display: flex; flex-direction: column; }
+    .lightbox::backdrop { background: rgba(6, 7, 10, 0.78); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+    .lb-bar { display: flex; align-items: center; gap: 16px; padding: 12px 12px 12px 20px; border-bottom: 1px solid var(--shot-border); }
+    .lb-bar p { flex: 1; min-width: 0; margin: 0; color: #c9cad6; font-size: 14.5px; }
+    .lb-close {
+      display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 10px; cursor: pointer;
+      background: #1c1d23; border: 1px solid #34353f; color: #ececf1;
+    }
+    .lb-scroll { overflow: auto; overscroll-behavior: contain; }
+    .lb-scroll img { display: block; width: 100%; height: auto; }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <symbol id="i-gh" viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><rect x="5.5" y="4.5" width="4.5" height="15" rx="1"/><rect x="14" y="4.5" width="4.5" height="15" rx="1"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="5.5" y="5.5" width="13" height="13" rx="2"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M10 20H4v-6"/><path d="m20 4-6.5 6.5"/><path d="m4 20 6.5-6.5"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6A1.5 1.5 0 0 0 14 4.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><path d="m14.5 6-6 6 6 6"/></symbol>
+    <symbol id="i-right" viewBox="0 0 24 24"><path d="m9.5 6 6 6-6 6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-retry" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.5 7.5A2.5 2.5 0 0 1 6 5h3.6l2 2.2H18a2.5 2.5 0 0 1 2.5 2.5v7.8A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5z"/></symbol>
+    <symbol id="i-zip" viewBox="0 0 24 24"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5"/><path d="M10.5 6H12M10.5 9H12M10.5 12H12"/><rect x="9.8" y="14.5" width="3.4" height="3.4" rx=".8"/></symbol>
+    <symbol id="i-coins" viewBox="0 0 24 24"><ellipse cx="12" cy="6.5" rx="7" ry="2.8"/><path d="M5 6.5v5c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8v-5"/><path d="M5 11.5v5c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8v-5"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/></symbol>
+    <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6.5 3.5h11v17l-5.5-3.8-5.5 3.8z"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 5 6v5.5c0 4.3 3 7.9 7 9 4-1.1 7-4.7 7-9V6z"/><path d="m9 12 2.2 2.2L15.5 10"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.8"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></symbol>
+    <symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m6 6 12 12"/></symbol>
+  </svg>
+
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="site-head">
+    <div class="wrap head-inner">
+      <a class="brand" href="#top"><img src="assets/icon-128.png" width="28" height="28" alt=""><span>FlowBatch</span></a>
+      <nav class="nav" aria-label="Sections">
+        <a href="#how">How it works</a>
+        <a href="#features">Features</a>
+        <a href="#install">Install</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <div class="head-actions">
+        <a class="icon-link" href="https://github.com/Manish-404/Flow_batch" aria-label="FlowBatch on GitHub"><svg class="i i-fill" aria-hidden="true"><use href="#i-gh"/></svg><span>GitHub</span></a>
+        <a class="btn btn-primary btn-sm" href="#install">Get FlowBatch</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="wrap hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow"><i></i>Free Chrome extension for Google Flow &amp; Gemini</p>
+          <h1>Press Start.<br><span class="accent">Walk away.</span></h1>
+          <p class="lead">FlowBatch works through a queue of prompts in <b>Google Flow</b> or <b>Gemini</b>, one at a time. For each prompt it attaches the images you <b>@mentioned</b>, waits for the result, downloads it and moves on to the next. A batch of 30 prompts runs without you.</p>
+          <div class="cta">
+            <a class="btn btn-primary" href="https://github.com/Manish-404/Flow_batch/archive/refs/heads/main.zip"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Download FlowBatch</a>
+            <a class="btn btn-ghost" href="https://github.com/Manish-404/Flow_batch"><svg class="i i-fill" aria-hidden="true"><use href="#i-gh"/></svg>View on GitHub</a>
+          </div>
+          <p class="fine">Free · Chrome 116 or newer · No account needed · <a href="#install">Install steps</a></p>
+        </div>
+
+        <div class="mock-stack">
+          <div class="mock" data-queue role="img" aria-label="Illustration of FlowBatch in the middle of a run: prompt 1 is done and saved, prompt 2 is generating in Google Flow, and prompts 3 and 4 are waiting.">
+            <div class="m-top" aria-hidden="true">
+              <div class="m-seg"><span class="on">Google Flow</span><span>Gemini</span></div>
+              <span class="m-conn"><i></i><span>Flow project connected</span></span>
+            </div>
+            <div class="m-card" aria-hidden="true">
+              <div class="m-head"><b>Work queue</b><span class="m-badge">4</span></div>
+              <ol class="m-rows">
+                <li class="q-row done"><span class="q-n">01</span><span class="q-tag">IMG</span><span class="q-txt">Convert <i>@f_001</i> into a 2D anime illustration, cel-shaded</span><span class="q-st"></span></li>
+                <li class="q-row run"><span class="q-n">02</span><span class="q-tag">IMG</span><span class="q-txt">Convert <i>@f_002</i> into a 2D anime illustration, soft rim light</span><span class="q-st"></span></li>
+                <li class="q-row"><span class="q-n">03</span><span class="q-tag">IMG</span><span class="q-txt">Convert <i>@f_003</i> in the same style, golden hour</span><span class="q-st"></span></li>
+                <li class="q-row"><span class="q-n">04</span><span class="q-tag">IMG</span><span class="q-txt">Convert <i>@f_004</i> in the same style, film grain</span><span class="q-st"></span></li>
+              </ol>
+            </div>
+            <div class="m-dock" aria-hidden="true">
+              <div class="q-bar"><span></span></div>
+              <div class="q-line"><b data-done>1 / 4 done</b><span data-status>#02 · Generating… 0s</span></div>
+              <div class="q-btns">
+                <span class="b-run" data-run><svg class="i i-fill"><use href="#i-play"/></svg><span>Running…</span></span>
+                <span class="b-pause"><svg class="i i-fill"><use href="#i-pause"/></svg>Pause</span>
+                <span class="b-stop"><svg class="i i-fill"><use href="#i-stop"/></svg>Stop</span>
+              </div>
+            </div>
+          </div>
+          <div class="files" aria-hidden="true">
+            <div class="files-path">Downloads › FlowBatch › <b>anime_run_01</b></div>
+            <ul>
+              <li class="saved" data-file><span class="sw s1"></span><span>001_f_001.png</span><span class="st"></span></li>
+              <li data-file><span class="sw s2"></span><span>002_f_002.png</span><span class="st"></span></li>
+              <li data-file><span class="sw s3"></span><span>003_f_003.png</span><span class="st"></span></li>
+              <li data-file><span class="sw s4"></span><span>004_f_004.png</span><span class="st"></span></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="watch" aria-labelledby="watch-title" style="padding-top: 24px">
+      <div class="wrap">
+        <div class="section-head center">
+          <p class="kicker">Watch</p>
+          <h2 id="watch-title">See a run in 21 seconds</h2>
+        </div>
+        <div class="video-card">
+          <video controls preload="none" playsinline poster="media/flowbatch-promo.jpg" width="1920" height="1080" aria-describedby="video-cap">
+            <source src="media/flowbatch-promo.mp4" type="video/mp4">
+            <a href="media/flowbatch-promo.mp4">Download the promo video (MP4)</a>
+          </video>
+        </div>
+        <p class="video-cap" id="video-cap">Write the prompts, @mention your frames, press Start. The video has music, so check your volume.</p>
+      </div>
+    </section>
+
+    <section class="section band" id="how" aria-labelledby="how-title">
+      <div class="wrap how-grid">
+        <div>
+          <div class="section-head">
+            <p class="kicker">How it works</p>
+            <h2 id="how-title">Four steps. The last one is walking away.</h2>
+          </div>
+          <ol class="steps">
+            <li>
+              <span class="step-n" aria-hidden="true">1</span>
+              <div><h3>Add your images</h3><p>Drop them in, choose a folder, or pull frames out of a video. Each image gets a name you can <code>@mention</code>.</p></div>
+            </li>
+            <li>
+              <span class="step-n" aria-hidden="true">2</span>
+              <div><h3>Write the prompts</h3><p>Put <code>###</code> between prompts and <code>@mention</code> the image each one uses. Or write one template and press <b>One prompt per asset</b>.</p></div>
+            </li>
+            <li>
+              <span class="step-n" aria-hidden="true">3</span>
+              <div><h3>Press Start</h3><p>For each prompt, FlowBatch attaches its images, types it into Flow or Gemini and submits it. It waits until the result has loaded, or until the site reports an error.</p></div>
+            </li>
+            <li>
+              <span class="step-n" aria-hidden="true">4</span>
+              <div><h3>Collect the results</h3><p>Each result downloads as soon as it's ready, named in queue order. Failed prompts can retry on their own, and you can pause, resume or stop at any point.</p></div>
+            </li>
+          </ol>
+        </div>
+        <div>
+          <figure class="ed">
+            <div class="ed-head"><b>Prompt input</b><span>3 prompts</span></div>
+            <pre class="ed-body">Convert <span class="mention">@f_001</span> into a 2D anime illustration.
+Keep the exact pose and framing. Clean cel-shading.
+<span class="sep">###</span>
+Convert <span class="mention">@f_002</span> into a 2D anime illustration.
+Soft rim lighting, crisp line art.
+<span class="sep">###</span>
+Convert <span class="mention">@f_003</span> in the same style. Golden hour.</pre>
+          </figure>
+          <div class="how-arrow" aria-hidden="true"><span><svg class="i i-fill"><use href="#i-play"/></svg>Start</span></div>
+          <figure class="files" style="margin: 0">
+            <figcaption class="files-path">Downloads › FlowBatch › <b>anime_run_01</b></figcaption>
+            <ul>
+              <li><span class="sw s1"></span><span>001_f_001.png</span><span class="st"></span></li>
+              <li><span class="sw s2"></span><span>002_f_002.png</span><span class="st"></span></li>
+              <li><span class="sw s3"></span><span>003_f_003.png</span><span class="st"></span></li>
+            </ul>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="features" aria-labelledby="features-title">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="kicker">Beyond the queue</p>
+          <h2 id="features-title">Everything around the prompts, too</h2>
+          <p class="sub">Pull frames out of a video, send clips to Flow, and get results ready to post, all from the same panel.</p>
+        </div>
+
+        <article class="feature">
+          <div class="feature-copy">
+            <p class="f-kicker">Frame extractor</p>
+            <h3>Turn any video into numbered stills</h3>
+            <p>Pick a video and an interval, say every half second. FlowBatch saves a still at each step and adds it to your images as <code>f_001</code>, <code>f_002</code> and so on, ready to @mention.</p>
+            <ul class="ticks">
+              <li>Use a file on your computer, a direct link to a video you host, or whatever is playing in a tab</li>
+              <li>Frames from files and links land at exact times, and Start and End take just a slice</li>
+              <li>Tab capture crops to the video itself, not the page around it</li>
+            </ul>
+          </div>
+          <div class="feature-shot">
+            <a class="shot tall" href="screenshots/frames.png" data-lightbox data-caption="Frame extractor: video preview, interval and the extracted frames">
+              <img src="screenshots/frames.png" width="1660" height="2872" loading="lazy" decoding="async" alt="The frame extractor with a video preview, a 0.5-second interval and eight extracted frames named f_001 to f_008">
+              <span class="zoom"><svg class="i" aria-hidden="true"><use href="#i-expand"/></svg>Full size</span>
+            </a>
+          </div>
+        </article>
+
+        <article class="feature">
+          <div class="feature-copy">
+            <p class="f-kicker">Split video</p>
+            <h3>Cut clips and send them to Flow</h3>
+            <p>Split a video into clips every N seconds, as MP4 that Flow accepts. Check each one in its player and untick the ones you don't want. Then save them, zip them, or attach the rest to Flow's prompt box in one go.</p>
+            <ul class="ticks">
+              <li>WebM or oversized clips are converted to MP4 before they're sent</li>
+              <li>Every clip reports back: <b>In Flow ✓</b>, or the reason Flow gave for refusing it</li>
+              <li><b>+ Assets</b> turns clips into references you can @mention in a prompt</li>
+            </ul>
+          </div>
+          <div class="feature-shot">
+            <a class="shot tall" href="screenshots/split.png" data-lightbox data-caption="Split video: clips every N seconds, then save, zip or send the ticked ones to Flow">
+              <img src="screenshots/split.png" width="1660" height="3048" loading="lazy" decoding="async" alt="The Split video card with four two-second MP4 clips, three of them ticked, and Save, ZIP, Assets and Send to Flow buttons">
+              <span class="zoom"><svg class="i" aria-hidden="true"><use href="#i-expand"/></svg>Full size</span>
+            </a>
+          </div>
+        </article>
+
+        <article class="feature">
+          <div class="feature-copy">
+            <p class="f-kicker">Sequential frames</p>
+            <h3>Animate your stills, pair by pair</h3>
+            <p>Flow's <b>Frames to video</b> animates from a start frame to an end frame. FlowBatch pairs your images in order, <code>pic_001 → pic_002</code>, <code>pic_003 → pic_004</code>, and makes one scene per pair.</p>
+            <ul class="ticks">
+              <li>One click re-imports a finished image run, ready for video</li>
+              <li>With an odd number of images, the last one uses <b>Ingredients to video</b> instead, and you're told before anything runs</li>
+              <li>Queue rows are tagged <code>FRM</code> or <code>ING</code> so you can see the mode of every scene</li>
+            </ul>
+          </div>
+          <div class="feature-shot">
+            <a class="shot fade" href="screenshots/video.png" data-lightbox data-caption="Sequential frames: images paired start → end for Flow's Frames to video" style="--crop: 7.6%">
+              <img src="screenshots/video.png" width="1572" height="2056" loading="lazy" decoding="async" alt="Video mode with Veo 3.1 Fast selected, a 16:9 ratio, a credit estimate and Sequential frames ticked">
+              <span class="zoom"><svg class="i" aria-hidden="true"><use href="#i-expand"/></svg>Full size</span>
+            </a>
+          </div>
+        </article>
+
+        <article class="feature">
+          <div class="feature-copy">
+            <p class="f-kicker">Gemini</p>
+            <h3>Prefer Gemini? Same queue.</h3>
+            <p>Flip the switch at the top of the panel. Images, @mentions, the queue, downloads and ZIPs all work the same way. FlowBatch just drives Gemini instead of Flow.</p>
+            <ul class="ticks">
+              <li>Each prompt starts a new chat, so one result doesn't steer the next</li>
+              <li>Picks <b>Create images</b> or <b>Create videos</b>, and the Fast, Thinking or Pro model</li>
+              <li>Saves images at full size, and marks a prompt failed with Gemini's own words when a reply has no image</li>
+            </ul>
+          </div>
+          <div class="feature-shot">
+            <a class="shot" href="screenshots/gemini.png" data-lightbox data-caption="Gemini: its own model choice, a ratio added to the prompt, one result per prompt" style="--crop: 19%">
+              <img src="screenshots/gemini.png" width="1572" height="1516" loading="lazy" decoding="async" alt="Generation options with Gemini selected: Image mode, no ratio set, and the Thinking model">
+              <span class="zoom"><svg class="i" aria-hidden="true"><use href="#i-expand"/></svg>Full size</span>
+            </a>
+          </div>
+        </article>
+
+        <article class="feature">
+          <div class="feature-copy">
+            <p class="f-kicker">Publish queue</p>
+            <h3>From results to a posting plan</h3>
+            <p>Turn finished results into posts. Captions come from a template, hashtags are suggested from your own prompts, and each post gets a time. Then export one ZIP for Meta Business Suite or YouTube Studio.</p>
+            <ul class="ticks">
+              <li>Media, captions, a spreadsheet and a JSON schedule in one archive</li>
+              <li>Edit any caption or time, and untick what you won't post</li>
+              <li>It never posts for you and never asks for your logins</li>
+            </ul>
+          </div>
+          <div class="feature-shot">
+            <a class="shot tall" href="screenshots/publish.png" data-lightbox data-caption="Publish queue: captions from your prompts, suggested hashtags and a posting time for each item">
+              <img src="screenshots/publish.png" width="1660" height="3744" loading="lazy" decoding="async" alt="The Publish queue with Instagram and Facebook ticked, a caption template, suggested hashtags and a posting schedule">
+              <span class="zoom"><svg class="i" aria-hidden="true"><use href="#i-expand"/></svg>Full size</span>
+            </a>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section band" id="details" aria-labelledby="details-title">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="kicker">The small things</p>
+          <h2 id="details-title">Built for long, unattended runs</h2>
+        </div>
+        <div class="d-grid">
+          <div class="d-card">
+            <div class="ic"><svg class="i" aria-hidden="true"><use href="#i-retry"/></svg></div>
+            <h3>Retries and pauses</h3>
+            <p>Failed prompts retry on their own, or all together with one click. Pause lets the current prompt finish first, and Stop puts it back in the queue.</p>
+          </div>
+          <div class="d-card">
+            <div class="ic"><svg class="i" aria-hidden="true"><use href="#i-folder"/></svg></div>
+            <h3>Tidy downloads</h3>
+            <p>Results land in <code>Downloads/FlowBatch/&lt;project&gt;/</code> as <code>001_f_001.png</code>, <code>002_f_002.png</code> and so on, in queue order.</p>
+          </div>
+          <div class="d-card">
+            <div class="ic"><svg class="i" aria-hidden="true"><use href="#i-zip"/></svg></div>
+            <h3>ZIP only what you tick</h3>
+            <p>Pack images, frames or results into one archive, untick anything you don't need, and choose where it's saved.</p>
+          </div>
+          <div class="d-card">
+            <div class="ic"><svg class="i" aria-hidden="true"><use href="#i-coins"/></svg></div>
+            <h3>Credits before you spend</h3>
+            <p>Shows your Flow plan and the credits you have left, estimates what a run will cost, and warns you before you start one you can't cover.</p>
+          </div>
+          <div class="d-card">
+            <div class="ic"><svg class="i" aria-hidden="true"><use href="#i-target"/></svg></div>
+            <h3>Keeps up with Google</h3>
+            <p>Buttons are found by flexible matching. If Flow or Gemini moves one, Diagnose shows what was found and Pick fixes it in one click.</p>
+          </div>
+          <div class="d-card">
+            <div class="ic"><svg class="i" aria-hidden="true"><use href="#i-bookmark"/></svg></div>
+            <h3>Remembers your work</h3>
+            <p>Your queue, prompts, images and settings are still there when you close the panel and open it again.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="screens" aria-labelledby="screens-title">
+      <div class="wrap strip-head">
+        <div class="section-head">
+          <p class="kicker">Screens</p>
+          <h2 id="screens-title">Every part of the panel</h2>
+          <p class="sub">Select a screen to see it full size.</p>
+        </div>
+        <div class="strip-nav">
+          <button class="round" type="button" data-strip="-1" aria-controls="strip" aria-label="Scroll screens left"><svg class="i" aria-hidden="true"><use href="#i-left"/></svg></button>
+          <button class="round" type="button" data-strip="1" aria-controls="strip" aria-label="Scroll screens right"><svg class="i" aria-hidden="true"><use href="#i-right"/></svg></button>
+        </div>
+      </div>
+      <div class="strip" id="strip" tabindex="0" role="region" aria-label="Screenshots of FlowBatch">
+        <a class="g" href="screenshots/panel.png" data-lightbox data-caption="The side panel: pick Google Flow or Gemini at the top, then images, prompts and options">
+          <span class="g-frame"><img src="screenshots/panel.png" width="1720" height="4160" loading="lazy" decoding="async" alt="The FlowBatch side panel with eight images loaded as assets"><span class="zoom"><svg class="i" aria-hidden="true"><use href="#i-expand"/></svg></span></span>
+          <span class="g-cap"><b>The side panel</b>Google Flow or Gemini, then images, prompts and options</span>
+        </a>
+        <a class="g" href="screenshots/prompt.png" data-lightbox data-caption="Prompt editor: @mentions and ### separators highlighted as you type" style="--crop: 4%">
+          <span class="g-frame"><img src="screenshots/prompt.png" width="1720" height="2088" loading="lazy" decoding="async" alt="The prompt editor with highlighted @mentions and ### separators"><span class="zoom"><svg class="i" aria-hidden="true"><use href="#i-expand"/></svg></span></span>
+          <span class="g-cap"><b>Prompt editor</b>@mentions and separators highlighted as you type</span>
+        </a>
+        <a class="g" href="screenshots/queue.png" data-lightbox data-caption="Work queue: one row per prompt, with result thumbnails">
+          <span class="g-frame"><img src="screenshots/queue.png" width="1720" height="2020" loading="lazy" decoding="async" alt="The work queue with three finished prompts and three waiting"><span class="zoom"><svg class="i" aria-hidden="true"><use href="#i-expand"/></svg></span></span>
+          <span class="g-cap"><b>Work queue</b>One row per prompt, with result thumbnails</span>
+        </a>
+        <a class="g" href="screenshots/frames.png" data-lightbox data-caption="Frame extractor: video preview, interval and the extracted frames">
+          <span class="g-frame"><img src="screenshots/frames.png" width="1660" height="2872" loading="lazy" decoding="async" alt="The frame extractor with a video preview and extracted frames"><span class="zoom"><svg class="i" aria-hidden="true"><use href="#i-expand"/></svg></span></span>
+          <span class="g-cap"><b>Frame extractor</b>Stills every N seconds from a video file</span>
+        </a>
+        <a class="g" href="screenshots/url.png" data-lightbox data-caption="From URL: a direct link to a video file you host or have the rights to">
+          <span class="g-frame"><img src="screenshots/url.png" width="1660" height="3040" loading="lazy" decoding="async" alt="The frame extractor loading a video from a direct link"><span class="zoom"><svg class="i" aria-hidden="true"><use href="#i-expand"/></svg></span></span>
+          <span class="g-cap"><b>From URL</b>A direct link to a video file you host</span>
+        </a>
+        <a class="g" href="screenshots/capture.png" data-lightbox data-caption="Capture tab: frames from whatever is playing in the browser, cropped to the video">
+          <span class="g-frame"><img src="screenshots/capture.png" width="1660" height="3044" loading="lazy" decoding="async" alt="The frame extractor capturing the video playing in the active tab"><span class="zoom"><svg class="i" aria-hidden="true"><use href="#i-expand"/></svg></span></span>
+          <span class="g-cap"><b>Capture tab</b>Frames from whatever is playing, cropped to the video</span>
+        </a>
+        <a class="g" href="screenshots/zip.png" data-lightbox data-caption="ZIP picker: untick anything you don't want, then choose where to save">
+          <span class="g-frame"><img src="screenshots/zip.png" width="1676" height="2004" loading="lazy" decoding="async" alt="The ZIP picker with five of eight frames ticked"><span class="zoom"><svg class="i" aria-hidden="true"><use href="#i-expand"/></svg></span></span>
+          <span class="g-cap"><b>ZIP picker</b>Untick what you don't want, then choose where to save</span>
+        </a>
+        <a class="g" href="screenshots/video.png" data-lightbox data-caption="Sequential frames: images paired start → end for Flow's Frames to video" style="--crop: 7.6%">
+          <span class="g-frame"><img src="screenshots/video.png" width="1572" height="2056" loading="lazy" decoding="async" alt="Video mode with Sequential frames ticked"><span class="zoom"><svg class="i" aria-hidden="true"><use href="#i-expand"/></svg></span></span>
+          <span class="g-cap"><b>Sequential frames</b>Images paired start → end for Frames to video</span>
+        </a>
+        <a class="g" href="screenshots/split.png" data-lightbox data-caption="Split video: clips every N seconds, then save, zip or send the ticked ones to Flow">
+          <span class="g-frame"><img src="screenshots/split.png" width="1660" height="3048" loading="lazy" decoding="async" alt="The Split video card with four clips"><span class="zoom"><svg class="i" aria-hidden="true"><use href="#i-expand"/></svg></span></span>
+          <span class="g-cap"><b>Split video</b>Clips every N seconds, then save, zip or send them</span>
+        </a>
+        <a class="g" href="screenshots/publish.png" data-lightbox data-caption="Publish queue: captions from your prompts, suggested hashtags and a posting time for each item">
+          <span class="g-frame"><img src="screenshots/publish.png" width="1660" height="3744" loading="lazy" decoding="async" alt="The Publish queue with captions, hashtags and times"><span class="zoom"><svg class="i" aria-hidden="true"><use href="#i-expand"/></svg></span></span>
+          <span class="g-cap"><b>Publish queue</b>Captions, suggested hashtags and a time per post</span>
+        </a>
+        <a class="g" href="screenshots/gemini.png" data-lightbox data-caption="Gemini: its own model choice, a ratio added to the prompt, one result per prompt" style="--crop: 19%">
+          <span class="g-frame"><img src="screenshots/gemini.png" width="1572" height="1516" loading="lazy" decoding="async" alt="Generation options with Gemini selected"><span class="zoom"><svg class="i" aria-hidden="true"><use href="#i-expand"/></svg></span></span>
+          <span class="g-cap"><b>Gemini options</b>Its own models, and the ratio goes into the prompt</span>
+        </a>
+        <a class="g" href="screenshots/gemini-settings.png" data-lightbox data-caption="Gemini elements: Pick, Test and Diagnose for each part of Gemini's page">
+          <span class="g-frame"><img src="screenshots/gemini-settings.png" width="1720" height="2404" loading="lazy" decoding="async" alt="Settings for finding each part of Gemini's page, with Pick and Test buttons"><span class="zoom"><svg class="i" aria-hidden="true"><use href="#i-expand"/></svg></span></span>
+          <span class="g-cap"><b>Gemini elements</b>Pick, Test and Diagnose each part of the page</span>
+        </a>
+        <a class="g" href="screenshots/settings.png" data-lightbox data-caption="Settings: pacing, behaviour, site addresses and element calibration">
+          <span class="g-frame"><img src="screenshots/settings.png" width="1720" height="5200" loading="lazy" decoding="async" alt="The Settings view with pacing, automation switches and Flow element calibration"><span class="zoom"><svg class="i" aria-hidden="true"><use href="#i-expand"/></svg></span></span>
+          <span class="g-cap"><b>Settings</b>Pacing, behaviour, site addresses and calibration</span>
+        </a>
+      </div>
+      <div class="wrap"><p class="strip-note">Screenshots show placeholder images in place of real video frames and results.</p></div>
+    </section>
+
+    <section class="section band" id="install" aria-labelledby="install-title">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="kicker">Install</p>
+          <h2 id="install-title">Up and running in a minute</h2>
+          <p class="sub">FlowBatch isn't in the Chrome Web Store, so you add it to Chrome yourself. There are four steps, and you only do them once.</p>
+        </div>
+        <div class="install-grid">
+          <ol class="i-steps">
+            <li>
+              <h3>Download and unzip</h3>
+              <p>You get a folder called <code>Flow_batch-main</code>. Keep it somewhere safe, because Chrome runs FlowBatch from that folder.</p>
+              <a class="btn btn-primary" href="https://github.com/Manish-404/Flow_batch/archive/refs/heads/main.zip"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Download FlowBatch (.zip)</a>
+            </li>
+            <li>
+              <h3>Open Chrome's extensions page</h3>
+              <p>Paste <span class="copyline"><code>chrome://extensions</code><button class="copy" type="button" data-copy="chrome://extensions"><svg class="i" aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span></button></span> into the address bar. Web pages can't link there, so you have to paste it.</p>
+              <p>Then turn on <b>Developer mode</b> in the top-right corner.</p>
+            </li>
+            <li>
+              <h3>Load it</h3>
+              <p>Click <b>Load unpacked</b> and choose the <code>Flow_batch-main</code> folder, the one with <code>manifest.json</code> inside.</p>
+            </li>
+            <li>
+              <h3>Open the panel</h3>
+              <p>Pin FlowBatch from the puzzle-piece menu, then click its icon. The panel opens on the right. Open Google Flow or Gemini and sign in. If the tab was already open, reload it once.</p>
+            </li>
+          </ol>
+          <div class="aside">
+            <div class="aside-card">
+              <h3>You'll need</h3>
+              <p>Google Chrome 116 or newer on a computer, and a Google account that can use Flow or Gemini.</p>
+            </div>
+            <div class="aside-card">
+              <h3>Updating</h3>
+              <p>Download the ZIP again and replace the folder's contents. On <code>chrome://extensions</code>, click the reload arrow on FlowBatch's card, then reload your Flow or Gemini tab.</p>
+            </div>
+            <div class="aside-card">
+              <h3>Prefer git?</h3>
+              <p>Clone the repository, load that folder instead, and update it with <code>git pull</code>.</p>
+              <pre class="cmd">git clone https://github.com/Manish-404/Flow_batch.git</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="privacy" aria-labelledby="privacy-title">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="kicker">Privacy</p>
+          <h2 id="privacy-title">It runs in your browser, and nowhere else</h2>
+        </div>
+        <div class="p-grid">
+          <div class="p-card">
+            <div class="ic"><svg class="i" aria-hidden="true"><use href="#i-shield"/></svg></div>
+            <h3>No server, no account, no analytics</h3>
+            <p>FlowBatch has no server of its own and collects nothing. Your prompts and images go only to the Flow or Gemini page you're using.</p>
+          </div>
+          <div class="p-card">
+            <div class="ic"><svg class="i" aria-hidden="true"><use href="#i-link"/></svg></div>
+            <h3>It only talks to what you point it at</h3>
+            <p>That means the Flow or Gemini tab you're using, Google's file servers for your results, and a video link if you paste one.</p>
+          </div>
+          <div class="p-card">
+            <div class="ic"><svg class="i" aria-hidden="true"><use href="#i-user"/></svg></div>
+            <h3>Your account, your credits</h3>
+            <p>It works in your own signed-in browser, just like clicking through Flow yourself. Google's credits, limits and terms apply as usual.</p>
+          </div>
+          <div class="p-card">
+            <div class="ic"><svg class="i" aria-hidden="true"><use href="#i-ban"/></svg></div>
+            <h3>What it won't do</h3>
+            <p>It won't download from YouTube, Instagram, Facebook or Threads, post to social media, or ask for any password.</p>
+          </div>
+        </div>
+        <details class="perms">
+          <summary>Why Chrome shows these permissions</summary>
+          <dl>
+            <dt>Read and change data on all websites</dt>
+            <dd>To fetch a video from a link you paste, which can be on any site. It also uses this to download your results from Google's file servers and to find the video on a tab you capture.</dd>
+            <dt>Downloads</dt>
+            <dd>To save each result into your Downloads folder.</dd>
+            <dt>Storage</dt>
+            <dd>To keep your queue, prompts, images and settings on your computer between sessions.</dd>
+            <dt>Tabs and scripting</dt>
+            <dd>To find your Flow or Gemini tab and connect FlowBatch to it.</dd>
+            <dt>Tab capture</dt>
+            <dd>For <b>Capture tab</b>, which records what's playing in a tab only when you press the button.</dd>
+            <dt>Side panel</dt>
+            <dd>To show FlowBatch beside the page you're working on.</dd>
+          </dl>
+        </details>
+        <p class="p-note">This website has no cookies, analytics or third-party scripts either.</p>
+      </div>
+    </section>
+
+    <section class="section band" id="faq" aria-labelledby="faq-title">
+      <div class="wrap">
+        <div class="section-head center">
+          <p class="kicker">FAQ</p>
+          <h2 id="faq-title">Questions</h2>
+        </div>
+        <div class="faq">
+          <details>
+            <summary>Is FlowBatch in the Chrome Web Store?</summary>
+            <p>Not at the moment. You install it from the ZIP on this page. It takes about a minute, and you only do it once. See <a href="#install">Install</a>.</p>
+          </details>
+          <details>
+            <summary>Is it free?</summary>
+            <p>Yes, FlowBatch is free. What you generate still uses your own Google Flow credits or Gemini limits. FlowBatch estimates how many Flow credits a run will use before you start.</p>
+          </details>
+          <details>
+            <summary>Is it made by Google?</summary>
+            <p>No. FlowBatch is an independent project and isn't affiliated with or endorsed by Google. It uses the Flow and Gemini pages in your own browser, the way you would by hand.</p>
+          </details>
+          <details>
+            <summary>What happens when Google changes Flow or Gemini?</summary>
+            <p>FlowBatch finds buttons by flexible matching instead of fixed IDs, so small changes usually don't break it. If a step fails, the Activity log shows which one. Open <b>Settings → Flow elements</b> (or <b>Gemini elements</b>) and press <b>Diagnose</b>, then use <b>Pick</b> to click the right element on the page. FlowBatch uses your choice from then on.</p>
+          </details>
+          <details>
+            <summary>Where do my results go?</summary>
+            <p>They go into <code>Downloads/FlowBatch/&lt;project name&gt;/</code>, named in queue order: <code>001_f_001.png</code>, <code>002_f_002.png</code> and so on. You can change the base folder in Settings, or pack any set into a ZIP and save it wherever you like.</p>
+          </details>
+          <details>
+            <summary>Does it work in Edge, Brave or other browsers?</summary>
+            <p>It's built for Google Chrome 116 or newer on a computer. Other Chromium browsers with a side panel may work, but they haven't been tested.</p>
+          </details>
+          <details>
+            <summary>Can it download videos from YouTube or Instagram?</summary>
+            <p>No, because those platforms' terms forbid it. <b>Capture tab</b> records what your own browser is playing, and <b>From URL</b> reads direct links to video files. Use them for footage you own or have the rights to.</p>
+          </details>
+          <details>
+            <summary>Will it post to Instagram or YouTube for me?</summary>
+            <p>No. The Publish queue prepares captions, hashtags and times and exports them. You then schedule the posts in Meta Business Suite or YouTube Studio. FlowBatch never asks for your social logins.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section class="closing" aria-labelledby="closing-title">
+      <div class="wrap">
+        <h2 id="closing-title">Hand over the clicking.</h2>
+        <p>Queue the prompts, press Start, and come back to a folder of results.</p>
+        <div class="cta">
+          <a class="btn btn-primary" href="https://github.com/Manish-404/Flow_batch/archive/refs/heads/main.zip"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Download FlowBatch</a>
+          <a class="btn btn-ghost" href="#install">Install steps</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-foot">
+    <div class="wrap">
+      <div class="foot-top">
+        <div class="foot-brand">
+          <img src="assets/icon-128.png" width="34" height="34" alt="">
+          <div><b>FlowBatch</b><p>A free Chrome extension for Google Flow and Gemini.</p></div>
+        </div>
+        <nav class="foot-links" aria-label="Footer">
+          <a href="https://github.com/Manish-404/Flow_batch">Source on GitHub</a>
+          <a href="https://github.com/Manish-404/Flow_batch/issues">Report a problem</a>
+          <a href="#install">Install</a>
+          <a href="#faq">FAQ</a>
+        </nav>
+      </div>
+      <p class="legal">FlowBatch is an independent project and is not affiliated with or endorsed by Google. Google, Google Flow and Gemini are trademarks of Google LLC.</p>
+    </div>
+  </footer>
+
+  <dialog class="lightbox" id="lightbox" aria-labelledby="lb-caption">
+    <div class="lb-bar">
+      <p id="lb-caption"></p>
+      <form method="dialog"><button class="lb-close" aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-close"/></svg></button></form>
+    </div>
+    <div class="lb-scroll"><img alt=""></div>
+  </dialog>
+
+  <p class="sr-only" aria-live="polite" id="live"></p>
+
+  <script>
+    (() => {
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      /* Hero: the queue works through its four prompts, then starts over */
+      const queue = document.querySelector('[data-queue]');
+      if (queue) {
+        const rows = [...queue.querySelectorAll('.q-row')];
+        const files = [...document.querySelectorAll('[data-file]')];
+        const bar = queue.querySelector('.q-bar > span');
+        const done = queue.querySelector('[data-done]');
+        const status = queue.querySelector('[data-status]');
+        const runLabel = queue.querySelector('[data-run] > span');
+        const total = rows.length;
+        let step = 1;
+        let secs = 0;
+        let visible = true;
+        const render = () => {
+          rows.forEach((row, i) => {
+            row.classList.toggle('done', i < step);
+            row.classList.toggle('run', i === step);
+          });
+          files.forEach((file, i) => file.classList.toggle('saved', i < step));
+          bar.style.width = `${(Math.max(step, 0.25) / total) * 100}%`;
+          done.textContent = `${step} / ${total} done`;
+          if (step < total) {
+            status.textContent = `#${String(step + 1).padStart(2, '0')} · Generating… ${secs}s`;
+            runLabel.textContent = 'Running…';
+          } else {
+            status.textContent = 'All results saved';
+            runLabel.textContent = 'Start';
+          }
+          queue.classList.toggle('finished', step >= total);
+        };
+        render();
+        if (!reduce) {
+          new IntersectionObserver((entries) => { visible = entries[0].isIntersecting; }).observe(queue);
+          setInterval(() => {
+            if (!visible || document.hidden) return;
+            secs += 1;
+            if (step < total && secs >= 4) { step += 1; secs = 0; }
+            else if (step >= total && secs >= 4) { step = 0; secs = 0; }
+            render();
+          }, 1000);
+        }
+      }
+
+      /* Screenshots open full size in a dialog; without JS the links open the image */
+      const box = document.getElementById('lightbox');
+      if (box && typeof box.showModal === 'function') {
+        const img = box.querySelector('.lb-scroll img');
+        const caption = box.querySelector('#lb-caption');
+        const scroller = box.querySelector('.lb-scroll');
+        document.addEventListener('click', (e) => {
+          const link = e.target.closest('a[data-lightbox]');
+          if (!link || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          e.preventDefault();
+          img.src = link.getAttribute('href');
+          img.alt = link.querySelector('img')?.alt || '';
+          caption.textContent = link.dataset.caption || '';
+          box.showModal();
+          scroller.scrollTop = 0;
+        });
+        box.addEventListener('click', (e) => { if (e.target === box) box.close(); });
+      }
+
+      /* Copy chrome://extensions, or select it where the clipboard is blocked */
+      const live = document.getElementById('live');
+      document.querySelectorAll('[data-copy]').forEach((button) => {
+        const label = button.querySelector('span');
+        const original = label.textContent;
+        button.addEventListener('click', async () => {
+          let copied = false;
+          try {
+            await navigator.clipboard.writeText(button.dataset.copy);
+            copied = true;
+          } catch {
+            const range = document.createRange();
+            range.selectNodeContents(button.previousElementSibling);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+          }
+          label.textContent = copied ? 'Copied' : 'Press Ctrl+C';
+          live.textContent = copied ? 'Copied chrome://extensions' : 'Selected. Press Ctrl+C to copy.';
+          setTimeout(() => { label.textContent = original; }, 1800);
+        });
+      });
+
+      /* Arrow buttons for the screenshot strip */
+      const strip = document.getElementById('strip');
+      const arrows = [...document.querySelectorAll('[data-strip]')];
+      if (strip && arrows.length) {
+        const update = () => {
+          const max = strip.scrollWidth - strip.clientWidth - 1;
+          arrows[0].disabled = strip.scrollLeft <= 0;
+          arrows[1].disabled = strip.scrollLeft >= max;
+        };
+        arrows.forEach((button) => button.addEventListener('click', () => {
+          strip.scrollBy({ left: Number(button.dataset.strip) * strip.clientWidth * 0.8, behavior: reduce ? 'auto' : 'smooth' });
+        }));
+        strip.addEventListener('scroll', update, { passive: true });
+        window.addEventListener('resize', update);
+        update();
+      }
+    })();
+  </script>
+</body>
+</html>

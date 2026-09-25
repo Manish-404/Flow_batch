@@ -8,6 +8,9 @@ and moves on to the next prompt.
 It also includes a frame extractor that turns a video into stills every N seconds — from a local file,
 a direct video URL, or by capturing whatever is playing in a browser tab.
 
+**Website:** [manish-404.github.io/Flow_batch](https://manish-404.github.io/Flow_batch/) — what it does,
+screenshots and install steps on one page.
+
 <p align="center">
   <a href="docs/media/flowbatch-promo.mp4"><img src="docs/media/flowbatch-promo.jpg" width="720" alt="FlowBatch promo video — click to play"></a>
   <br><sub>▶ <a href="docs/media/flowbatch-promo.mp4"><b>Watch the 21-second promo</b></a> — write 30 prompts, @mention your frames, press Start, walk away.</sub>
