@@ -79,7 +79,7 @@ export const ASPECTS = {
 // Gemini's model picker in the prompt box — one setting for images and videos (Veo makes the
 // videos whichever is picked). `match` is tested against its menu items.
 const GEMINI_MODEL_LIST = [
-  { id: 'keep', label: "Gemini's current", sub: "Don't change", icon: '–', match: null },
+  { id: 'keep', label: 'Unchanged', sub: "Gemini's current", icon: '–', match: null },
   { id: 'fast', label: 'Fast', sub: 'Quickest', icon: 'G', match: '^fast\\b|flash' },
   { id: 'thinking', label: 'Thinking', sub: 'Images: Nano Banana Pro', icon: 'G', match: '^thinking\\b' },
   { id: 'pro', label: 'Pro', sub: 'Most capable', icon: 'G', match: '^(\\d(\\.\\d)?\\s*)?pro\\b' },
@@ -90,7 +90,7 @@ export const GEMINI_MODELS = { image: GEMINI_MODEL_LIST, video: GEMINI_MODEL_LIS
 const ADDED = 'Added to the prompt';
 export const GEMINI_ASPECTS = {
   image: [
-    { id: 'keep', label: 'Leave to Gemini', sub: 'Nothing added', icon: '–' },
+    { id: 'keep', label: 'Not set', sub: 'Gemini decides', icon: '–' },
     { id: '16:9', label: '16:9', sub: ADDED, icon: 'land' },
     { id: '9:16', label: '9:16', sub: ADDED, icon: 'port' },
     { id: '1:1', label: '1:1', sub: ADDED, icon: 'sq' },
@@ -98,7 +98,7 @@ export const GEMINI_ASPECTS = {
     { id: '3:4', label: '3:4', sub: ADDED, icon: 'port' },
   ],
   video: [
-    { id: 'keep', label: 'Leave to Gemini', sub: 'Nothing added', icon: '–' },
+    { id: 'keep', label: 'Not set', sub: 'Gemini decides', icon: '–' },
     { id: '16:9', label: '16:9', sub: ADDED, icon: 'land' },
     { id: '9:16', label: '9:16', sub: ADDED, icon: 'port' },
   ],

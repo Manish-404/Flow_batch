@@ -1,9 +1,10 @@
-# FlowBatch: bulk generator for Google Flow
+# FlowBatch: bulk generator for Google Flow and Gemini
 
 FlowBatch is a Chrome side-panel extension. It runs a queue of 20–30+ prompts in
-[Google Flow](https://flow.google.com/), one prompt at a time. For each prompt it attaches the
-reference images mentioned in the prompt, types the prompt, and submits it. Then it waits until
-Flow finishes (or reports an error), downloads the result, and moves on to the next prompt.
+[Google Flow](https://flow.google.com/) or [Gemini](https://gemini.google.com/app), one prompt at a
+time. For each prompt it attaches the reference images mentioned in the prompt, types the prompt,
+and submits it. Then it waits until the site finishes (or reports an error), downloads the result,
+and moves on to the next prompt.
 It also includes a frame extractor that turns a video into stills every N seconds — from a local file,
 a direct video URL, or by capturing whatever is playing in a browser tab.
 
@@ -14,7 +15,7 @@ a direct video URL, or by capturing whatever is playing in a browser tab.
   &nbsp;
   <img src="docs/screenshots/prompt.png" width="300" alt="Prompt editor with highlighted mentions and separators">
 </p>
-<p align="center"><sub><b>The side panel</b> — reference images, prompts and generation options &nbsp;·&nbsp; <b>Prompt editor</b> — @mentions and <code>###</code> separators highlighted as you type</sub></p>
+<p align="center"><sub><b>The side panel</b> — pick Google Flow or Gemini at the top, then reference images, prompts and generation options &nbsp;·&nbsp; <b>Prompt editor</b> — @mentions and <code>###</code> separators highlighted as you type</sub></p>
 
 <p align="center">
   <img src="docs/screenshots/frames.png" width="300" alt="Frame extractor with video preview and extracted frames">
@@ -42,23 +43,30 @@ a direct video URL, or by capturing whatever is playing in a browser tab.
   &nbsp;
   <img src="docs/screenshots/publish.png" width="300" alt="Publish queue with captions, hashtags and scheduled times">
 </p>
-<p align="center"><sub><b>Split video</b> &mdash; clips every N seconds; save, zip or send the ones you tick to Flow &nbsp;&middot;&nbsp; <b>Publish queue</b> &mdash; captions from your prompts, suggested hashtags and a posting time per item</sub></p>
+<p align="center"><sub><b>Split video</b> &mdash; clips every N seconds; save, zip or send the ones you tick to Flow or Gemini &nbsp;&middot;&nbsp; <b>Publish queue</b> &mdash; captions from your prompts, suggested hashtags and a posting time per item</sub></p>
+
+<p align="center">
+  <img src="docs/screenshots/gemini.png" width="300" alt="Generation options with Gemini selected: ratio not set, Thinking model">
+  &nbsp;
+  <img src="docs/screenshots/gemini-settings.png" width="300" alt="Gemini element calibration in Settings">
+</p>
+<p align="center"><sub><b>Gemini</b> &mdash; its own model choice, a ratio added to the prompt, one result per prompt &nbsp;&middot;&nbsp; <b>Gemini elements</b> &mdash; Pick / Test / Diagnose for each part of Gemini's page</sub></p>
 
 <p align="center">
   <img src="docs/screenshots/settings.png" width="300" alt="Settings view">
 </p>
-<p align="center"><sub><b>Settings</b> &mdash; pacing, behaviour and Flow element calibration</sub></p>
+<p align="center"><sub><b>Settings</b> &mdash; pacing, behaviour, site URLs and element calibration</sub></p>
 
-<sub><i>The panel is shown with placeholder images standing in for real video frames and Flow output.</i></sub>
+<sub><i>The panel is shown with placeholder images standing in for real video frames and Flow or Gemini output.</i></sub>
 
 ## Install (unpacked)
 
 1. Open `chrome://extensions` and turn on **Developer mode** (top right).
 2. Click **Load unpacked** and select this `FlowBatch` folder.
 3. Pin the extension, then click its icon. The panel opens on the right side of the window.
-4. Open a Google Flow tab. If Flow was already open before you installed the extension, reload that tab once.
+4. Open a Google Flow tab, or Gemini. If it was already open before you installed the extension, reload that tab once.
 
-After you edit any file, click **Reload** on the extension card and reload the Flow tab.
+After you edit any file, click **Reload** on the extension card and reload the Flow or Gemini tab.
 
 ## Typical workflow (video → anime frames)
 
@@ -81,6 +89,40 @@ After you edit any file, click **Reload** on the extension card and reload the F
 Other ways to add images: drag and drop them, browse for files, or **Choose folder instead**. Rename an image in its card
 and every `@mention` of it in your prompts is updated. Type `@` in the prompt box to pick an image from a list.
 Press `Ctrl + Enter` to insert a separator.
+
+## Using Gemini instead of Flow
+
+Switch **Google Flow | Gemini** at the top of the panel. Assets, @mentions, prompts, the queue, downloads
+and ZIPs work the same way; only the page FlowBatch drives changes. Sign in to
+[gemini.google.com](https://gemini.google.com/app) first.
+
+For each prompt, FlowBatch:
+
+1. opens a **new chat**, so the previous image and reply don't steer the next result
+   (*Settings → Start a new Gemini chat for each prompt*),
+2. picks Gemini's **Create images** tool — **Create videos** in Video mode — and the model you chose:
+   **Fast**, **Thinking** or **Pro** (Thinking is the one that makes images with Nano Banana Pro),
+3. uploads each `@mentioned` image through Gemini's **+** menu,
+4. types the prompt and sends it,
+5. waits until Gemini's reply has finished and nothing in it is still loading,
+6. downloads the image at full size. Gemini shows a downscaled copy; FlowBatch asks for the original
+   first and falls back to the copy on the page.
+
+What is different from Flow:
+
+- **One result per prompt.** Gemini has no x1–x4, so that control is hidden.
+- **No aspect-ratio control.** Pick a ratio and FlowBatch adds `Aspect ratio: 16:9.` to the prompt;
+  leave it on *Not set* to add nothing, which keeps the source framing for image edits.
+- **No start/end frames**, so *Sequential frames* and *One prompt per frame pair* are Flow-only. In Video
+  mode each prompt, with its image, becomes one Veo video. Veo's video appears a minute or two after
+  Gemini's text reply, and FlowBatch waits for it.
+- **A reply without an image fails the prompt,** quoting Gemini — for example
+  `Gemini replied without an image: “I can't create images of …”`. Gemini's daily limits apply;
+  *Stop the queue after 3 failures in a row* ends a run that has hit one.
+- **Send to Gemini** in the Split video card attaches up to 10 clips at a time, Gemini's limit per message.
+
+When Gemini is selected, Settings shows **Gemini elements** — prompt box, send button, upload (+),
+Tools, model picker and New chat — with the same Diagnose / Pick / Test tools as Flow.
 
 ## Where frames come from
 
@@ -118,7 +160,8 @@ fixed length — every 5 seconds, say — so each piece can be saved or used in 
 4. Each clip appears as it finishes, with a player so you can check it. Untick the ones you don't want.
 5. **⤓ Save** writes the ticked clips to `Downloads/<Base folder>/<Project name>/clips/`,
    **⤓ ZIP…** packs them into one archive wherever you choose, and **Send to Flow** attaches all the
-   ticked clips to the prompt box in your Flow tab in one batch — nothing typed or submitted.
+   ticked clips to the prompt box in your Flow tab in one batch — nothing typed or submitted. With
+   Gemini selected the button reads **Send to Gemini** and does the same there.
 
 **How it works, and what that costs.** A browser extension can't bundle ffmpeg, so Chrome plays the
 source and `MediaRecorder` re-records each segment. That means:
@@ -156,6 +199,9 @@ something Flow will take, sends them together, and checks what happened to each 
 
 Whether Flow *uses* an uploaded clip still depends on its mode: several of its video modes take images,
 not video.
+
+**Send to Gemini** works the same way, into Gemini's prompt box: the same MP4 copies, the same chunked
+transfer and per-clip check. Gemini takes at most 10 files per message, so tick 10 clips or fewer.
 
 
 
@@ -205,7 +251,7 @@ a hashtag alone does not satisfy those policies.
 
 Three cards offer **⤓ Download as ZIP…**: *Upload assets* (any image in the panel), *Frame extractor* (the frames from
 the last run, even if you did not add them to assets), and the summary at the end of a run (*Download results as ZIP*,
-read straight from the Flow tab, so keep it open).
+read straight from the Flow or Gemini tab, so keep it open).
 
 Each opens a picker where every image starts ticked. Untick anything you do not want — or use **All / None / Invert** —
 name the archive, and press **Download ZIP…**. Chrome's *Save as* dialog then lets you put it wherever you like, instead
@@ -244,39 +290,46 @@ For each prompt, FlowBatch:
 6. marks the prompt **success** once the expected number of new results has loaded and nothing is still in progress,
    or **failed** on an error message or after the *timeout*. Then it waits *Delay between prompts* before the next one.
 
+In Gemini, step 5 watches the reply instead: a prompt succeeds when the reply has finished and holds an image
+(or video), and fails when it finishes without one.
+
 Failed prompts can be retried automatically (*Retries per prompt*), one at a time with **↻**, or all together with
 **Regenerate failed images**. **Pause** lets the current prompt finish and then stops; **Resume** continues from there.
 **Stop** cancels the current prompt and puts it back in the queue. Your queue, prompts, assets and settings are
 kept when you close the panel.
 
-## If Flow's layout changes
+## If Flow's or Gemini's layout changes
 
-Google changes Flow's interface often, so FlowBatch locates buttons with flexible matching instead of fixed element
+Google changes both interfaces often, so FlowBatch locates buttons with flexible matching instead of fixed element
 IDs. If a step fails (see **Activity log**):
 
-1. Open a Flow project, then go to **Settings → Flow elements → Diagnose current Flow tab** to see what was detected.
+1. Open a Flow project (or Gemini), then go to **Settings → Flow elements → Diagnose current Flow tab** to see what
+   was detected. With Gemini selected, the card is **Gemini elements**.
 2. Click **Pick** next to *Prompt box*, *Submit button*, *Add image button*, *Generation settings button*, or the
    *Start frame slot* / *End frame slot* used by sequential video, then click that element on the Flow page.
-   The saved selector overrides automatic detection.
+   For Gemini the elements are *Prompt box*, *Send button*, *Upload (+) button*, *Tools button*, *Model picker* and
+   *New chat button*. The saved selector overrides automatic detection.
 3. **Test** highlights the element that will be used.
-4. If mode, ratio, model or count can't be found, the log says so and the run continues. Set those options once by hand
-   in Flow, or turn off *Apply mode / ratio / model / count in Flow*.
+4. If mode, ratio, model or count (Gemini: tool or model) can't be found, the log says so and the run continues. Set
+   those options once by hand, or turn off *Apply mode / ratio / model / count*.
 
 ## Files
 
 | Path | Purpose |
 | --- | --- |
-| `manifest.json` | MV3 manifest (side panel, downloads, content scripts for `flow.google.com`) |
+| `manifest.json` | MV3 manifest (side panel, downloads, content scripts for `flow.google.com` and `gemini.google.com`) |
 | `background.js` | Opens the side panel when the toolbar icon is clicked |
-| `content/page-hook.js` | Main-world hook: catches Flow's file-picker call so images can be uploaded without the OS dialog opening |
-| `content/dom.js` | Element finders, clicking and typing helpers, result/progress/error detection, element picker |
-| `content/flow-agent.js` | Actions the panel calls: `attachImage`, `setPrompt`, `submit`, `poll`, `applySettings`, … |
+| `content/page-hook.js` | Main-world hook: catches the site's file-picker call so images can be uploaded without the OS dialog opening |
+| `content/dom.js` | Element finders, clicking and typing helpers, result/progress/error detection, element picker, shared agent plumbing |
+| `content/flow-agent.js` | Actions the panel calls in Flow: `attachImage`, `setPrompt`, `submit`, `poll`, `applySettings`, … |
+| `content/gemini-agent.js` | The same actions for Gemini, plus `newChat`; replies, tools and the model picker |
+| `sidepanel/js/site.js` | The two sites: finding their tab, talking to their agent, streaming files into it |
 | `sidepanel/js/runner.js` | Queue loop: upload → type → submit → wait → download → delay |
 | `sidepanel/js/frames.js` | Frame extraction: local/URL video seeking, and `tabCapture` of the active tab |
 | `sidepanel/js/zip.js` | ZIP writer (stored entries, ZIP64 when an archive needs it) |
 | `sidepanel/js/zip-ui.js` | The "pick what goes in the ZIP" sheet |
 | `sidepanel/js/split.js` | Video splitting with `MediaRecorder`: clip plan, silent audio routing, per-segment recording |
-| `sidepanel/js/split-ui.js` | Split video card: clip list, save / ZIP / send to Flow |
+| `sidepanel/js/split-ui.js` | Split video card: clip list, save / ZIP / send to Flow or Gemini |
 | `sidepanel/js/publish-ui.js` | Publish queue: caption templates, schedule plan, batch export |
 | `sidepanel/js/hashtags.js` | Caption summaries and prompt-derived hashtags |
 | `sidepanel/js/results.js` | Shared access to the queue's generated results |
