@@ -23,6 +23,8 @@ export function pickMime(prefer, { strict = false } = {}) {
 
 // File types Flow's uploader accepts ("PNG, JPG, … MP4, M4V, MOV, 3GP, AVI").
 export const FLOW_VIDEO_TYPES = /^video\/(mp4|x-m4v|quicktime|3gpp|x-msvideo|avi)$/i;
+// Videos of those types up to this size go to Flow (and Gemini) as they are; others are re-encoded.
+export const FLOW_MAX_BYTES = 40 * 1024 * 1024;
 
 /**
  * Video bitrate that keeps a clip of `seconds` under `maxBytes`, never above the chosen quality.

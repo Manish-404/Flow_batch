@@ -1,24 +1,25 @@
 // "Split video" card: cut the video loaded in Frame extractor into clips every N seconds,
 // then save the ones you want, zip them, or send them to Flow or Gemini as references.
-import { app, on, persistSession } from './app.js';
+import { app, on, emit, persistSession } from './app.js';
 import { getLoadedVideo } from './frames-ui.js';
-import { splitVideo, clipPlan, pickMime, toFlowMp4, FLOW_VIDEO_TYPES, MAX_CLIPS } from './split.js';
+import { splitVideo, clipPlan, pickMime, toFlowMp4, FLOW_VIDEO_TYPES, FLOW_MAX_BYTES, MAX_CLIPS } from './split.js';
 import { downloadBlob } from './downloads.js';
 import { openZipPicker } from './zip-ui.js';
+import { addAssets, replaceAssetFile, setOnSite, renderAssets } from './assets-ui.js';
 import { SITES, findSiteTab, callAgent, stageFiles } from './site.js';
 import { $, el, pad, extFromMime, fmtBytes, fmtDuration, sanitizeSegment, log, toast } from './utils.js';
 
-// Clips Flow can take (MP4) up to this size go as they are; anything else is re-encoded first.
-// Gemini gets the same MP4 copies.
-const FLOW_MAX_BYTES = 40 * 1024 * 1024;
+// Clips Flow can take (MP4) up to FLOW_MAX_BYTES go as they are; anything else is re-encoded
+// first. Gemini gets the same MP4 copies.
 // Size budget for a re-encoded copy — small enough to upload quickly.
 const FLOW_TARGET_BYTES = 25 * 1024 * 1024;
 // Gemini takes at most this many files in one message.
 const GEMINI_MAX_FILES = 10;
 
-let clips = []; // { id, name, start, end, blob, url, include, flowBlob?, flow? }
+// flow: the last send's verdict · inFlow: the file name Flow confirmed · assetId: its Upload asset
+let clips = []; // { id, name, start, end, blob, url, include, flowBlob?, flow?, inFlow?, assetId? }
 let controller = null; // splitting
-let sender = null; // sending to Flow / Gemini
+let sender = null; // sending to Flow / Gemini, or converting for Upload assets
 
 const s = () => app.session.split;
 const folder = () => `${sanitizeSegment(app.settings.baseFolder, 'FlowBatch')}/${sanitizeSegment(app.session.projectName, 'Untitled')}/clips`;
@@ -64,6 +65,13 @@ function flowLine(c) {
   return el('span', { class: `split-flow ${cls}`, text: c.flow.text, title: c.flow.text });
 }
 
+const assetOf = (c) => (c.assetId && app.assets.find((a) => a.id === c.assetId)) || null;
+
+function assetLine(c) {
+  const a = assetOf(c);
+  return a ? el('span', { class: 'split-asset', text: `In assets as @${a.name}` }) : null;
+}
+
 function renderClips() {
   $('splitList').replaceChildren(
     ...clips.map((c) => {
@@ -81,7 +89,8 @@ function renderClips() {
           el('b', { text: c.name }),
           el('span', { text: `${c.start.toFixed(1)}s → ${c.end.toFixed(1)}s` }),
           el('span', { text: `${fmtBytes(c.blob.size)} · ${type}` }),
-          flowLine(c)
+          flowLine(c),
+          assetLine(c)
         )
       );
       box.addEventListener('change', () => {
@@ -93,6 +102,7 @@ function renderClips() {
     })
   );
   renderCount();
+  emit('clipsChanged'); // the prompt box offers unknown @clip names from here
 }
 
 function renderCount() {
@@ -101,7 +111,7 @@ function renderCount() {
   $('splitActions').hidden = clips.length === 0;
   $('splitExport').hidden = clips.length === 0;
   $('splitCount').textContent = `${n} of ${clips.length} selected · ${fmtBytes(size)}`;
-  for (const id of ['btnSplitSave', 'btnSplitZip', 'btnSplitToFlow']) $(id).disabled = n === 0 || busy();
+  for (const id of ['btnSplitSave', 'btnSplitZip', 'btnSplitToAssets', 'btnSplitToFlow']) $(id).disabled = n === 0 || busy();
 }
 
 function releaseClips() {
@@ -261,6 +271,17 @@ async function sendToSite() {
       else if (allShown) c.flow = { state: 'ok', text: `In ${name} ✓` };
       else c.flow = { state: 'unconfirmed', text: 'Sent — not seen on the page yet' };
     });
+    // Flow keeps what it is sent, so a run can pick these clips from Flow instead of uploading
+    // them again. Gemini only holds files in the prompt box until a message goes, so no mark.
+    if (site === 'flow') {
+      for (const [i, c] of chosen.entries()) {
+        if (c.flow.state !== 'ok') continue;
+        c.inFlow = files[i].name;
+        const a = assetOf(c);
+        if (a) await setOnSite(a, 'flow', { file: c.inFlow });
+      }
+      renderAssets();
+    }
     const ok = chosen.filter((c) => c.flow?.state === 'ok').length;
     log(`${name}: ${r.method} · ${ok}/${r.expected} confirmed, ${rejected} rejected, ${r.added} new on the page`, rejected || ok < r.expected ? 'warn' : 'ok');
     r.files.filter((f) => f.error).forEach((f) => log(`${name} rejected ${f.name}: ${f.error}`, 'error'));
@@ -287,6 +308,117 @@ async function sendToSite() {
     renderClips();
     renderSource();
   }
+}
+
+/** Names of split clips among `names` (case-insensitive) that aren't assets yet, as the clips spell them. */
+export function splitClipNames(names) {
+  const want = new Set(names.map((n) => n.toLowerCase()));
+  return clips.filter((c) => want.has(c.name.toLowerCase()) && !assetOf(c)).map((c) => c.name);
+}
+
+/** Add the named split clips to Upload assets (from the prompt box's "Unknown" hint). */
+export function addClipsToAssets(names) {
+  const want = new Set(names.map((n) => n.toLowerCase()));
+  return addToAssets(clips.filter((c) => want.has(c.name.toLowerCase())));
+}
+
+/**
+ * Clips an open Flow tab already shows by name (its project grid lists uploads) get the
+ * "already in Flow" mark, so a run picks them there instead of uploading again.
+ */
+async function markIfInFlow(assets) {
+  const unmarked = assets.filter((a) => !a.onSite?.flow);
+  if (!unmarked.length) return 0;
+  const tab = await findSiteTab('flow', { open: false }).catch(() => null);
+  if (!tab) return 0;
+  try {
+    const r = await callAgent(tab.id, 'findNames', { selectors: SITES.flow.selectors(app.settings), names: unmarked.map((a) => a.name) }, { timeoutMs: 15000, retries: 1 });
+    const found = new Set((r.found || []).map((n) => n.toLowerCase()));
+    const hits = unmarked.filter((a) => found.has(a.name.toLowerCase()));
+    for (const a of hits) await setOnSite(a, 'flow', {});
+    if (hits.length) renderAssets();
+    return hits.length;
+  } catch (e) {
+    log(`Could not check the Flow tab for existing clips: ${e.message}`, 'warn');
+    return 0;
+  }
+}
+
+/**
+ * Add clips to Upload assets, so prompts can @mention them. Each goes in as the MP4 copy Flow
+ * and Gemini take (converted first when needed). A clip whose name is already an asset replaces
+ * that asset's file, keeping its name, marks and every @mention of it. Clips confirmed in Flow,
+ * or shown by name in the open Flow tab, are marked as already there.
+ */
+async function addToAssets(list = selected()) {
+  const fresh = list.filter((c) => !assetOf(c));
+  if (!fresh.length) return toast(`${list.length === 1 ? 'That clip is' : 'Those clips are'} already in Upload assets`);
+  const sameName = (c) => app.assets.find((a) => a.name.toLowerCase() === c.name.toLowerCase()) || null;
+  const clashes = fresh.filter(sameName);
+  const replace =
+    clashes.length > 0 &&
+    confirm(
+      `@${clashes.map((c) => c.name).join(', @')} ${clashes.length === 1 ? 'is' : 'are'} already in Upload assets.
+
+` +
+        `OK: replace ${clashes.length === 1 ? 'its file' : 'their files'} with ${clashes.length === 1 ? 'this clip' : 'these clips'} — names, marks and @mentions stay.
+` +
+        `Cancel: add ${clashes.length === 1 ? 'it' : 'them'} as new assets (e.g. @${clashes[0].name}_2).`
+    );
+  sender = new AbortController();
+  const signal = sender.signal;
+  renderCount();
+  renderSource();
+  $('btnCancelSplit').hidden = false;
+  try {
+    const items = [];
+    const replaced = [];
+    for (const [i, c] of fresh.entries()) {
+      if (signal.aborted) throw new Error('Cancelled');
+      if (!flowReady(c.blob) && !(c.flowBlob && flowReady(c.flowBlob))) {
+        $('splitStatus').textContent = `Converting ${c.name} to MP4 · ${i + 1}/${fresh.length}`;
+        setBar(i / fresh.length);
+      }
+      const blob = await forFlow(c, signal);
+      const old = replace ? sameName(c) : null;
+      if (old) {
+        await replaceAssetFile(old, blob);
+        if (c.inFlow) await setOnSite(old, 'flow', { file: c.inFlow });
+        c.assetId = old.id;
+        replaced.push(old);
+      } else {
+        items.push({ c, blob, name: c.name, onSite: c.inFlow ? { flow: { at: Date.now(), file: c.inFlow } } : undefined });
+      }
+    }
+    const created = items.length ? await addAssets(items) : [];
+    created.forEach((a, i) => (items[i].c.assetId = a.id));
+    const all = [...replaced, ...created];
+    $('splitStatus').textContent = 'Checking the Flow tab for these clips…';
+    const found = await markIfInFlow(all);
+    renderAssets();
+    const renamed = created.filter((a, i) => a.name !== items[i].name).length;
+    const marked = all.filter((a) => a.onSite?.flow).length;
+    log(
+      `Clips in Upload assets: @${all.map((a) => a.name).join(', @')}` +
+        `${created.length ? ` · ${created.length} added` : ''}${replaced.length ? ` · ${replaced.length} replaced` : ''}` +
+        `${renamed ? ` · ${renamed} renamed, as the name was taken` : ''}` +
+        `${marked ? ` · ${marked} marked as already in Flow${found ? ` (${found} found in the Flow tab)` : ''}` : ''}`,
+      'ok'
+    );
+    toast(`${all.length} clip${all.length === 1 ? '' : 's'} ready to @mention${marked ? ` · ${marked} already in Flow` : ''}`, 4000);
+  } catch (e) {
+    const cancelled = /cancel/i.test(e.message);
+    log(cancelled ? 'Adding clips to assets cancelled' : `Adding clips to assets failed: ${e.message}`, cancelled ? 'warn' : 'error');
+    toast(cancelled ? 'Cancelled' : e.message, 5000);
+  } finally {
+    sender = null;
+    $('btnCancelSplit').hidden = true;
+    setBar(null);
+    $('splitStatus').textContent = '';
+    renderClips();
+    renderSource();
+  }
+  return undefined;
 }
 
 export function initSplit() {
@@ -330,7 +462,10 @@ export function initSplit() {
   });
   $('btnSplitSave').addEventListener('click', saveSelected);
   $('btnSplitZip').addEventListener('click', zipSelected);
+  $('btnSplitToAssets').addEventListener('click', () => addToAssets());
   $('btnSplitToFlow').addEventListener('click', sendToSite);
+  // "In assets as @…" follows renames and removals.
+  on('assetsChanged', () => clips.some((c) => c.assetId) && renderClips());
   on('videoChanged', renderSource);
   on('siteChanged', renderSendButton);
   renderSendButton();

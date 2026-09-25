@@ -5,7 +5,7 @@ import { generatedResults, resultBlob } from './results.js';
 import { buildZip } from './zip.js';
 import { downloadBlobAs } from './downloads.js';
 import { suggestHashtags, parseTags, formatTags, promptSummary, buildCaption, DISCLOSURE_TAGS } from './hashtags.js';
-import { $, el, pad, extFromMime, fmtBytes, sanitizeSegment, log, toast } from './utils.js';
+import { $, el, pad, extFromMime, fmtBytes, sanitizeSegment, isVideoAsset, log, toast } from './utils.js';
 
 let plan = [];
 let busy = false;
@@ -35,9 +35,9 @@ function sourceItems() {
     return app.assets.map((a) => ({
       id: a.id,
       name: a.name,
-      kind: 'image',
+      kind: isVideoAsset(a) ? 'video' : 'image',
       prompt: byName.get(a.name.toLowerCase()) || app.session.promptText.split(app.settings.separator)[0] || '',
-      thumbUrl: a.thumbUrl,
+      thumbUrl: isVideoAsset(a) ? null : a.thumbUrl,
       getBlob: async () => a.blob,
     }));
   }

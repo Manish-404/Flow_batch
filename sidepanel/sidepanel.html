@@ -9,12 +9,21 @@
   <body>
     <!-- ============================ MAIN VIEW ============================ -->
     <main id="view-main" class="view">
+      <header class="app-head">
       <div class="topbar">
-        <input id="projectName" class="input input-lg" placeholder="Project name (used as download folder)" spellcheck="false" />
+        <input id="projectName" class="input" placeholder="Project name (download folder)" spellcheck="false" />
         <button id="btnSettings" class="icon-btn" title="Settings" aria-label="Settings">
           <svg viewBox="0 0 24 24" width="20" height="20"><path fill="none" stroke="currentColor" stroke-width="1.8" d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path fill="none" stroke="currentColor" stroke-width="1.8" d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
         </button>
       </div>
+      <div id="creditBar" class="credit-bar" role="status" aria-live="polite">
+        <span id="planBadge" class="plan-badge">Plan ?</span>
+        <span class="credit-main"><b id="creditLeft">—</b> <span id="creditLeftLabel">Flow credits left</span></span>
+        <span id="creditSub" class="credit-sub muted small"></span>
+        <button id="btnRefreshCredits" class="icon-btn icon-btn-sm" title="Refresh credits from the Flow tab" aria-label="Refresh credits">↻</button>
+      </div>
+      </header>
+      <div class="site-row">
       <div class="seg seg-sm site-seg" role="tablist" aria-label="Where to generate">
         <button class="seg-btn active" data-site="flow" title="Run the queue in Google Flow">Google Flow</button>
         <button class="seg-btn" data-site="gemini" title="Run the queue in Gemini (gemini.google.com)">Gemini</button>
@@ -23,6 +32,7 @@
         <span id="connPill" class="pill"><span class="dot"></span><span id="connText">Checking Flow tab…</span></span>
         <button id="btnOpenFlow" class="link-btn">Open Flow</button>
       </div>
+      </div>
 
       <!-- Upload assets -->
       <section class="card">
@@ -30,17 +40,18 @@
           <h2>Upload assets</h2>
           <span id="assetCount" class="muted small">0 images</span>
         </div>
-        <p class="muted">Optional — name each image to <b>@mention</b> it in a prompt.</p>
+        <p class="muted small">Optional. Name an image or clip to <b>@mention</b> it; tap <b>☁</b> on ones the site already has, so they aren't uploaded twice.</p>
         <div id="dropzone" class="dropzone" tabindex="0">
           <span class="plus-circle">+</span>
-          <span id="dropText">Drop images here, or click to browse</span>
+          <span id="dropText">Drop images or video clips here, or click to browse</span>
         </div>
-        <input id="fileInput" type="file" accept="image/*" multiple hidden />
+        <input id="fileInput" type="file" accept="image/*,video/*" multiple hidden />
         <input id="folderInput" type="file" webkitdirectory multiple hidden />
-        <button id="btnFolder" class="btn btn-ghost btn-sm">Choose folder instead</button>
+        <button id="btnFolder" class="link-btn folder-link">or choose a folder</button>
         <div id="assetGrid" class="asset-grid"></div>
         <div class="row" id="assetActions" hidden>
-          <button id="btnZipAssets" class="btn btn-ghost btn-sm grow">⤓ Download as ZIP…</button>
+          <button id="btnZipAssets" class="btn btn-ghost btn-sm grow" title="Download the assets as one ZIP">⤓ ZIP…</button>
+          <button id="btnMarkAssets" class="btn btn-ghost btn-sm grow">☁ All in Flow</button>
           <button id="btnClearAssets" class="btn btn-ghost btn-sm grow">Clear assets</button>
         </div>
       </section>
@@ -152,6 +163,7 @@
         <div class="row" id="splitExport" hidden>
           <button id="btnSplitSave" class="btn btn-ghost grow" title="Save the selected clips to Downloads">⤓ Save</button>
           <button id="btnSplitZip" class="btn btn-ghost grow" title="Pick clips and save them as one ZIP">⤓ ZIP…</button>
+          <button id="btnSplitToAssets" class="btn btn-ghost grow" title="Add the selected clips to Upload assets, so prompts can @mention them">+ Assets</button>
           <button id="btnSplitToFlow" class="btn btn-outline grow" title="Attach the selected clips to Flow's prompt box">Send to Flow</button>
         </div>
       </details>
@@ -159,8 +171,7 @@
       <!-- Prompt input -->
       <section class="card">
         <div class="card-head"><h2>Prompt input</h2><span id="promptStats" class="muted small">0 prompts</span></div>
-        <p class="muted">Separate multiple prompts with <code id="sepHint" class="kbd-accent">###</code> on its own line.</p>
-        <p class="muted">Shortcut: <kbd>Ctrl</kbd> + <kbd>↵</kbd> inserts a separator</p>
+        <p class="muted small">Put <code id="sepHint" class="kbd-accent">###</code> on its own line between prompts · <kbd>Ctrl</kbd>+<kbd>↵</kbd> inserts it · <kbd>@</kbd> mentions an asset</p>
         <div id="mentionChips" class="chips"></div>
         <div class="prompt-wrap" id="promptWrap">
           <button id="btnInsertSep" class="plus-mini" title="Insert separator">+</button>
@@ -192,12 +203,14 @@
             <div class="field"><span class="label">Aspect ratio</span><div id="aspectSelect" class="cselect"></div></div>
             <div class="field"><span class="label">Model</span><div id="modelSelect" class="cselect"></div></div>
           </div>
+          <div id="aspectHint" class="aspect-hint" role="status" hidden></div>
           <div class="seg count-seg" id="countSeg" data-flow-only>
             <button class="seg-btn active" data-count="1">x1</button>
             <button class="seg-btn" data-count="2">x2</button>
             <button class="seg-btn" data-count="3">x3</button>
             <button class="seg-btn" data-count="4">x4</button>
           </div>
+          <div id="creditLine" class="credit-line" role="status" hidden></div>
           <div class="checks" data-video-mode data-flow-only hidden>
             <label class="check"><input id="seqFrames" type="checkbox" /> Sequential frames — pair images as start → end</label>
           </div>
@@ -222,27 +235,22 @@
       </section>
 
       <!-- Controls -->
-      <section class="card controls">
-        <button id="btnStart" class="btn btn-primary btn-xl btn-block">
-          <svg viewBox="0 0 24 24" width="18" height="18"><path d="M7 5v14l12-7z" fill="currentColor"/></svg>
-          <span id="btnStartText">Start</span>
-        </button>
-        <div class="row">
-          <button id="btnPause" class="btn btn-dark grow" disabled>❚❚ Pause</button>
-          <button id="btnStop" class="btn btn-dark grow" disabled>■ Stop</button>
-          <button id="btnNewProject" class="btn btn-outline grow">New project</button>
-        </div>
-      </section>
-
-      <!-- Progress -->
-      <section class="card">
-        <h2>Progress</h2>
+      <section class="card controls run-dock" aria-label="Run">
         <div class="bar"><div id="progressBar" class="bar-fill"></div></div>
-        <div class="row between">
+        <div class="dock-status">
           <b id="progressText">0 / 0</b>
+          <span id="currentStep" class="muted small"></span>
           <span id="progressMeta" class="muted small"></span>
         </div>
-        <div id="currentStep" class="muted small"></div>
+        <div class="dock-buttons">
+          <button id="btnStart" class="btn btn-primary">
+            <svg viewBox="0 0 24 24" width="15" height="15"><path d="M7 5v14l12-7z" fill="currentColor"/></svg>
+            <span id="btnStartText">Start</span>
+          </button>
+          <button id="btnPause" class="btn btn-pause" disabled title="Pause after the current prompt">❚❚ Pause</button>
+          <button id="btnStop" class="btn btn-stop" disabled title="Stop the run">■ Stop</button>
+          <button id="btnNewProject" class="btn btn-ghost" title="Clear the queue and start a new project">New</button>
+        </div>
       </section>
 
       <!-- Summary -->
@@ -339,6 +347,17 @@
         <p class="muted small">Used by the + button and prompt splitting. The @ character is reserved for mentions.</p>
         <label class="field"><span class="label">Flow URL</span><input id="setFlowUrl" class="input" spellcheck="false" /></label>
         <label class="field"><span class="label">Gemini URL</span><input id="setGeminiUrl" class="input" spellcheck="false" /></label>
+        <label class="field"><span class="label">Flow plan (for credit estimates)</span>
+          <select id="setPlan" class="input">
+            <option value="auto">Detect from Flow's header</option>
+            <option value="free">Free</option>
+            <option value="standard">Standard</option>
+            <option value="plus">Plus</option>
+            <option value="pro">Pro</option>
+            <option value="ultra">Ultra</option>
+          </select>
+        </label>
+        <p class="muted small">Credit costs Flow shows itself are remembered and replace the built-in price list, so price changes are picked up. <button id="btnForgetPrices" class="link-btn" type="button">Forget remembered prices</button></p>
       </section>
 
       <section class="card">

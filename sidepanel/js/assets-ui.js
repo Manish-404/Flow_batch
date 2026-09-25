@@ -1,8 +1,93 @@
-// "Upload assets" card: add / rename / remove reference images (persisted in IndexedDB).
-import { app, emit, persistSession } from './app.js';
+// "Upload assets" card: add / rename / remove reference images and video clips (persisted in
+// IndexedDB), and mark the ones already uploaded to Flow or Gemini so a run doesn't upload them again.
+import { app, on, emit, persistSession } from './app.js';
 import { putAsset, deleteAsset, clearAssets } from './store.js';
 import { openZipPicker } from './zip-ui.js';
-import { $, el, sanitizeName, sanitizeSegment, naturalCompare, toast } from './utils.js';
+import { SITES, findSiteTab } from './site.js';
+import { FLOW_VIDEO_TYPES, FLOW_MAX_BYTES } from './split.js';
+import { $, el, sanitizeName, sanitizeSegment, naturalCompare, isVideoAsset, assetFileName, geminiChatId, fmtBytes, log, toast } from './utils.js';
+
+const site = () => (app.session.site === 'gemini' ? 'gemini' : 'flow');
+
+/** A small picture of the asset for chips and menus: the image, or a film glyph for a clip. */
+export const assetIcon = (a) => (isVideoAsset(a) ? el('span', { class: 'vid-dot', text: '🎞' }) : el('img', { src: a.thumbUrl, alt: '' }));
+
+function assetThumb(a) {
+  if (!isVideoAsset(a)) return el('img', { src: a.thumbUrl, alt: a.name, loading: 'lazy' });
+  // The clip itself: shows its first frame, plays while hovered.
+  const v = el('video', { src: a.thumbUrl, preload: 'metadata', playsinline: true, loop: true });
+  v.muted = true;
+  v.addEventListener('mouseenter', () => v.play().catch(() => {}));
+  v.addEventListener('mouseleave', () => v.pause());
+  return v;
+}
+
+const saveRecord = ({ thumbUrl, ...record }) => putAsset(record);
+
+/**
+ * Record that `asset` is already uploaded to `site` — `mark.file` is the name the site knows it
+ * by; for Gemini, `mark.chat` is the chat it is in — or clear that with `mark = null`.
+ * Call renderAssets() afterwards.
+ */
+export async function setOnSite(asset, siteKey, mark) {
+  const onSite = { ...(asset.onSite || {}) };
+  if (mark) onSite[siteKey] = { at: Date.now(), ...mark, file: mark.file || onSite[siteKey]?.file || assetFileName(asset) };
+  else delete onSite[siteKey];
+  asset.onSite = onSite;
+  await saveRecord(asset);
+}
+
+// A Gemini file lives in one chat: remember which, so a run in another chat uploads it again.
+async function newMark(s) {
+  if (s !== 'gemini') return {};
+  const tab = await findSiteTab('gemini', { open: false }).catch(() => null);
+  return { chat: geminiChatId(tab?.url) };
+}
+
+function onSiteHint(a) {
+  const s = site();
+  const { name } = SITES[s];
+  const mark = a.onSite?.[s];
+  if (!mark) return `Not marked: FlowBatch uploads @${a.name} to ${name} each time a prompt uses it. Click if ${name} already has it.`;
+  return s === 'flow'
+    ? `Already in Flow as “${mark.file}”: FlowBatch picks it from Flow's file picker instead of uploading it (and uploads it if it isn't found there). Click to unmark.`
+    : `Already in ${mark.chat ? `Gemini chat ${mark.chat}` : 'the open Gemini chat'} as “${mark.file}”: FlowBatch doesn't upload it and names that file in the prompt instead — ` +
+        `only in that chat, with “Start a new Gemini chat for each prompt” off. Click to unmark.`;
+}
+
+function onSiteToast(a, s, marked) {
+  const { name } = SITES[s];
+  if (!marked) return `@${a.name} will be uploaded to ${name} again`;
+  if (s === 'flow') return `@${a.name}: picked from Flow's file picker instead of uploaded (uploaded if it isn't there)`;
+  return app.settings.geminiNewChat
+    ? `@${a.name} marked — but each prompt starts a new Gemini chat (Settings), so it will still be uploaded`
+    : `@${a.name}: not uploaded — the prompt names ${a.onSite.gemini.file}, already in this chat`;
+}
+
+async function toggleOnSite(a) {
+  const s = site();
+  const marked = !a.onSite?.[s];
+  await setOnSite(a, s, marked ? await newMark(s) : null);
+  renderAssets();
+  toast(onSiteToast(a, s, marked), 5000);
+}
+
+async function markAll() {
+  const s = site();
+  const marked = !app.assets.every((a) => a.onSite?.[s]);
+  const mark = marked ? await newMark(s) : null;
+  for (const a of app.assets) await setOnSite(a, s, mark);
+  renderAssets();
+  const { name } = SITES[s];
+  toast(
+    !marked
+      ? `Marks cleared — assets will be uploaded to ${name}`
+      : s === 'gemini' && app.settings.geminiNewChat
+        ? `Marked — but each prompt starts a new Gemini chat (Settings), so they will still be uploaded`
+        : `All ${app.assets.length} assets marked as already in ${name}`,
+    5000
+  );
+}
 
 function uniqueName(base, exceptId) {
   const taken = new Set(app.assets.filter((a) => a.id !== exceptId).map((a) => a.name.toLowerCase()));
@@ -10,11 +95,11 @@ function uniqueName(base, exceptId) {
   for (let i = 2; ; i++) if (!taken.has(`${base}_${i}`.toLowerCase())) return `${base}_${i}`;
 }
 
-/** items: [{ blob, name }] — returns the created assets. */
+/** items: [{ blob, name, onSite? }] — returns the created assets. */
 export async function addAssets(items) {
   let order = app.assets.reduce((m, a) => Math.max(m, a.order), 0) + 1;
   const created = [];
-  for (const { blob, name } of items) {
+  for (const { blob, name, onSite } of items) {
     const asset = {
       id: crypto.randomUUID(),
       name: uniqueName(sanitizeName(name)),
@@ -22,6 +107,7 @@ export async function addAssets(items) {
       blob,
       order: order++,
     };
+    if (onSite) asset.onSite = onSite;
     await putAsset(asset);
     asset.thumbUrl = URL.createObjectURL(blob);
     app.assets.push(asset);
@@ -32,11 +118,37 @@ export async function addAssets(items) {
   return created;
 }
 
+/** Swap an asset's file, keeping its id, name, marks and @mentions. Call renderAssets() afterwards. */
+export async function replaceAssetFile(asset, blob) {
+  URL.revokeObjectURL(asset.thumbUrl);
+  asset.blob = blob;
+  asset.type = blob.type || asset.type;
+  asset.thumbUrl = URL.createObjectURL(blob);
+  await saveRecord(asset);
+  emit('assetsChanged');
+}
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+// Clips go in only when Flow takes them as they are; Split video converts the rest.
+function videoProblem(f) {
+  if (!FLOW_VIDEO_TYPES.test(f.type)) return `Flow takes MP4, MOV, M4V, 3GP or AVI, not ${f.type.replace('video/', '').toUpperCase()}`;
+  if (f.size > FLOW_MAX_BYTES) return `${fmtBytes(f.size)} is over the ${fmtBytes(FLOW_MAX_BYTES)} FlowBatch sends as is`;
+  return null;
+}
+
 async function addFiles(fileList) {
-  const files = [...fileList].filter((f) => f.type.startsWith('image/')).sort((a, b) => naturalCompare(a.name, b.name));
-  if (!files.length) return toast('No image files found');
+  const media = [...fileList].filter((f) => /^(image|video)\//.test(f.type)).sort((a, b) => naturalCompare(a.name, b.name));
+  const skipped = media.filter((f) => f.type.startsWith('video/') && videoProblem(f));
+  const files = media.filter((f) => !skipped.includes(f));
+  skipped.forEach((f) =>
+    log(`${f.name} not added: ${videoProblem(f)}. Load it in Frame extractor and use Split video → + Assets, which converts it.`, 'warn')
+  );
+  if (!files.length) return toast(skipped.length ? `${plural(skipped.length, 'video')} not added — see the Activity log` : 'No image or video files found', 5000);
   await addAssets(files.map((f) => ({ blob: f, name: f.name })));
-  toast(`Added ${files.length} image${files.length > 1 ? 's' : ''}`);
+  const clips = files.filter((f) => f.type.startsWith('video/')).length;
+  const added = [files.length - clips && plural(files.length - clips, 'image'), clips && plural(clips, 'clip')].filter(Boolean).join(' and ');
+  return toast(`Added ${added}${skipped.length ? ` · ${skipped.length} not added, see the Activity log` : ''}`, skipped.length ? 5000 : 2600);
 }
 
 async function renameAsset(asset, input) {
@@ -88,15 +200,30 @@ export async function removeAllAssets() {
 
 export function renderAssets() {
   const grid = $('assetGrid');
+  const s = site();
+  const siteName = SITES[s].name;
   grid.replaceChildren(
     ...app.assets.map((a) => {
       const input = el('input', { value: a.name, spellcheck: 'false', title: 'Rename' });
       input.addEventListener('change', () => renameAsset(a, input));
       input.addEventListener('keydown', (e) => e.key === 'Enter' && input.blur());
+      const marked = !!a.onSite?.[s];
       return el(
         'div',
         { class: 'asset' },
-        el('img', { src: a.thumbUrl, alt: a.name, loading: 'lazy' }),
+        el(
+          'div',
+          { class: 'thumb' },
+          assetThumb(a),
+          isVideoAsset(a) ? el('span', { class: 'vid', text: '🎞' }) : null,
+          el('button', {
+            class: `onsite${marked ? ' on' : ''}`,
+            type: 'button',
+            text: marked ? `✓ In ${siteName}` : `☁ In ${siteName}?`,
+            title: onSiteHint(a),
+            onclick: () => toggleOnSite(a),
+          })
+        ),
         el('button', { class: 'x', title: 'Remove', text: '✕', onclick: () => removeAsset(a) }),
         input,
         el('span', { class: 'at', text: `@${a.name}` })
@@ -104,10 +231,16 @@ export function renderAssets() {
     })
   );
   const n = app.assets.length;
-  $('assetCount').textContent = `${n} image${n === 1 ? '' : 's'}`;
+  const clips = app.assets.filter(isVideoAsset).length;
+  $('assetCount').textContent = clips ? `${plural(n - clips, 'image')} · ${plural(clips, 'clip')}` : plural(n, 'image');
   $('assetActions').hidden = n === 0;
   $('dropzone').classList.toggle('compact', n > 0);
-  $('dropText').textContent = n ? 'Add more images' : 'Drop images here, or click to browse';
+  $('dropText').textContent = n ? 'Add more images or clips' : 'Drop images or video clips here, or click to browse';
+  const all = n > 0 && app.assets.every((a) => a.onSite?.[s]);
+  $('btnMarkAssets').textContent = all ? `☁ Unmark all` : `☁ All in ${siteName}`;
+  $('btnMarkAssets').title = all
+    ? `Clear the marks — FlowBatch will upload these assets to ${siteName} again`
+    : `Mark every asset as already uploaded to ${siteName}, so a run doesn't upload them again`;
 }
 
 export function initAssets() {
@@ -143,10 +276,15 @@ export function initAssets() {
   $('btnZipAssets').addEventListener('click', () =>
     openZipPicker({
       title: 'Assets → ZIP',
-      note: 'Untick any image you do not want in the archive.',
+      note: 'Untick any file you do not want in the archive.',
       filename: `${sanitizeSegment(app.session.projectName, 'flowbatch')}_assets`,
-      items: app.assets.map((a) => ({ id: a.id, name: a.name, thumbUrl: a.thumbUrl, kind: 'image', getBlob: async () => a.blob })),
+      items: app.assets.map((a) => {
+        const video = isVideoAsset(a);
+        return { id: a.id, name: a.name, thumbUrl: video ? null : a.thumbUrl, kind: video ? 'video' : 'image', getBlob: async () => a.blob };
+      }),
     })
   );
+  $('btnMarkAssets').addEventListener('click', markAll);
+  on('siteChanged', renderAssets);
   renderAssets();
 }

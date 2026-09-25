@@ -123,6 +123,7 @@ function fillForm() {
   $('setFlowUrl').value = s.flowUrl;
   $('setGeminiUrl').value = s.geminiUrl;
   $('setMentionMode').value = s.mentionMode;
+  $('setPlan').value = s.plan || 'auto';
   document.querySelectorAll('[data-setting]').forEach((i) => (i.checked = !!s[i.dataset.setting]));
   for (const [key, st] of Object.entries(steppers)) st.set(s[key]);
   renderSiteLabels();
@@ -172,6 +173,16 @@ export function initSettings() {
   $('setMentionMode').addEventListener('change', (e) => {
     app.settings.mentionMode = e.target.value;
     persistSettings();
+  });
+  $('setPlan').addEventListener('change', (e) => {
+    app.settings.plan = e.target.value;
+    persistSettings();
+  });
+  $('btnForgetPrices').addEventListener('click', () => {
+    const n = Object.keys(app.settings.learnedCredits || {}).length;
+    app.settings.learnedCredits = {};
+    persistSettings();
+    toast(n ? `Forgot ${n} remembered price${n === 1 ? '' : 's'} — the built-in list is used until Flow shows them again` : 'No remembered prices');
   });
   document.querySelectorAll('[data-setting]').forEach((i) =>
     i.addEventListener('change', () => {

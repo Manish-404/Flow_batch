@@ -14,6 +14,8 @@ export const DEFAULT_SETTINGS = {
   autoNewProject: true,
   stopOnFailure: true,
   mentionMode: 'remove',
+  plan: 'auto', // Flow subscription for credit estimates: auto (read from Flow) | free | standard | plus | pro | ultra
+  learnedCredits: {}, // prices read from Flow itself; they win over CREDIT_TABLE
   theme: 'dark',
   selectors: { promptBox: '', submitButton: '', addImageButton: '', settingsButton: '', startFrameSlot: '', endFrameSlot: '' },
   geminiUrl: 'https://gemini.google.com/app',
@@ -56,7 +58,9 @@ export const MODELS = {
   video: [
     { id: 'keep', label: "Flow's current", sub: "Don't change", icon: '–', match: null },
     { id: 'veo-fast', label: 'Veo 3.1 Fast', sub: 'Faster, fewer credits', icon: 'V', match: 'veo.*fast' },
+    { id: 'veo-lite', label: 'Veo 3.1 Lite', sub: 'Fewest credits', icon: 'V', match: 'veo.*lite' },
     { id: 'veo-quality', label: 'Veo 3.1 Quality', sub: 'Highest quality', icon: 'V', match: 'veo.*quality' },
+    { id: 'omni-flash', label: 'Omni 1.1 Flash', sub: 'Gemini Omni', icon: 'O', match: 'omni' },
   ],
 };
 
@@ -104,6 +108,18 @@ export const GEMINI_ASPECTS = {
   ],
 };
 
+// Flow credits per generated video (one output), from Google's price list as of Sep 2026.
+// `ultra`: the Google AI Ultra price; `base`: every other plan. An object when the price depends on
+// the length (seconds). Prices Flow shows itself ("Generating will use N credits") are learned
+// into settings.learnedCredits and win over this table, so a price change is picked up on its own.
+export const CREDIT_TABLE = {
+  asOf: 'Sep 2026',
+  'veo-lite': { base: 10, ultra: 5 },
+  'veo-fast': { base: 20, ultra: 10 },
+  'veo-quality': { base: 100, ultra: 100 },
+  'omni-flash': { base: { 4: 15, 6: 20, 8: 25, 10: 30 } },
+};
+
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
 export async function loadSettings() {
@@ -111,6 +127,7 @@ export async function loadSettings() {
   const merged = { ...clone(DEFAULT_SETTINGS), ...(settings || {}) };
   merged.selectors = { ...DEFAULT_SETTINGS.selectors, ...(settings?.selectors || {}) };
   merged.geminiSelectors = { ...DEFAULT_SETTINGS.geminiSelectors, ...(settings?.geminiSelectors || {}) };
+  merged.learnedCredits = { ...(settings?.learnedCredits || {}) };
   return merged;
 }
 export const saveSettings = (settings) => chrome.storage.local.set({ settings });

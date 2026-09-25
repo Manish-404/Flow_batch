@@ -1,9 +1,14 @@
 // Queue orchestration: one prompt at a time — attach references, type, submit,
 // wait until Flow or Gemini finishes (or fails), download, then move on.
 import { MODELS, GEMINI_MODELS } from './store.js';
-import { SITES, findSiteTab, callAgent, pinTab, unpinTab, waitTabComplete } from './site.js';
+import { SITES, findSiteTab, callAgent, stageFiles, pinTab, unpinTab, waitTabComplete } from './site.js';
 import { downloadMedia, fetchMediaBlob } from './downloads.js';
-import { sleep, log, pad, slug, sanitizeSegment, promptForFlow, blobToDataUrl } from './utils.js';
+import { recordFlowInfo, spendOne } from './credits.js';
+import { sleep, log, pad, slug, sanitizeSegment, promptForFlow, blobToDataUrl, isVideoAsset, assetFileName, geminiChatId } from './utils.js';
+
+/** "@clip_001" → "clip_001.mp4" for files already in the Gemini chat, so the prompt can point at them. */
+const nameChatFiles = (prompt, assets) =>
+  assets.reduce((p, a) => p.replace(new RegExp(`@${a.name}(?![A-Za-z0-9_-])`, 'gi'), a.onSite.gemini.file || assetFileName(a)), prompt);
 
 class StopError extends Error {
   constructor() {
@@ -201,6 +206,10 @@ export class Runner {
       );
       const missing = r.report.some((x) => /not-found/.test(x));
       log(`Flow settings → ${r.report.join(' · ')}`, missing ? 'warn' : 'info');
+      if (r.priced) {
+        recordFlowInfo(r.priced);
+        if (r.priced.credits != null) log(`Flow: ${r.priced.credits} credits per prompt${r.priced.model ? ` (${r.priced.model}${r.priced.duration ? `, ${r.priced.duration}s` : ''})` : ''}${r.priced.plan ? ` · ${r.priced.plan} plan` : ''}`);
+      }
       if (missing) log('Some settings could not be found — set them manually in Flow if needed', 'warn');
     } catch (e) {
       log(`Could not apply Flow settings: ${e.message}`, 'warn');
@@ -259,6 +268,60 @@ export class Runner {
     }
   }
 
+  // ---------- assets already on the site ----------
+  /**
+   * An asset marked as already uploaded (Upload assets → ☁) is not uploaded again. Flow: it is
+   * picked by name from the file picker Flow's add button opens, and uploaded after all if it
+   * isn't there. Gemini: it is in the chat it was marked in, so the prompt names its file —
+   * only while that chat is open and each prompt doesn't start a new one.
+   * Returns true when the asset needs no upload.
+   */
+  async reuseUpload(asset, { tag, step, slot, inChat }) {
+    const mark = asset.onSite?.[this.site];
+    if (!mark) return false;
+    const file = mark.file || assetFileName(asset);
+    if (this.site === 'gemini') {
+      if (this.settings.geminiNewChat) {
+        log(`${tag} @${asset.name} is marked as in Gemini, but each prompt starts a new chat — uploading it`, 'warn');
+        return false;
+      }
+      const tab = await chrome.tabs.get(this.tabId).catch(() => null);
+      if (mark.chat && mark.chat !== geminiChatId(tab?.url)) {
+        log(`${tag} @${asset.name} is marked as in another Gemini chat — uploading it`, 'warn');
+        return false;
+      }
+      inChat.push(asset);
+      log(`${tag} @${asset.name} is already in this Gemini chat — named as ${file} in the prompt, not uploaded`);
+      return true;
+    }
+    step(`Picking @${asset.name} from Flow${slot ? ` → ${slot} frame` : ''}`);
+    try {
+      const names = [...new Set([asset.name, file.replace(/\.[a-z0-9]{2,4}$/i, '')])];
+      const r = await this.call('attachExisting', { names, slot }, { timeoutMs: 60000, retries: 0 });
+      if (r.found) {
+        log(
+          `${tag} picked @${asset.name} from Flow (“${r.label}”)${slot && !r.slotFound ? ` — ${slot} frame slot not found` : ''}` +
+            `${r.confirmed ? '' : ' (thumbnail not confirmed)'} — not uploaded again`,
+          r.confirmed ? 'info' : 'warn'
+        );
+        if (r.openDialogs?.length) log(`${tag} dialog still open: ${r.openDialogs.join(' | ')}`, 'warn');
+        return true;
+      }
+      log(`${tag} @${asset.name} is marked as in Flow but wasn't found in Flow's file picker — uploading it`, 'warn');
+    } catch (e) {
+      log(`${tag} could not pick @${asset.name} from Flow (${e.message}) — uploading it`, 'warn');
+    }
+    return false;
+  }
+
+  /** A clip is too big for one message: stream it into the tab in chunks, then attach it. */
+  async attachVideo(asset, onProgress) {
+    const [key] = await stageFiles(this.tabId, [{ blob: asset.blob, name: assetFileName(asset), type: asset.type }], { onProgress });
+    const settleMs = Math.min(300000, 45000 + (asset.blob.size / 1048576) * 2000);
+    const r = await this.call('attachFiles', { keys: [key], settleMs }, { timeoutMs: settleMs + 60000, retries: 0 });
+    return { method: r.method, confirmed: r.added >= 1, slotFound: false, error: r.files[0]?.error || null, dialogClicks: r.dialogClicks, openDialogs: r.openDialogs };
+  }
+
   // ---------- one queue item ----------
   async runItem(item) {
     const s = this.settings;
@@ -285,6 +348,7 @@ export class Runner {
         }));
         item.status = 'success';
         item.error = '';
+        if (this.site === 'flow') spendOne(); // until Flow shows the real balance
         this.itemDurations.push(Date.now() - t0);
         log(`#${pad(item.n, 2)} done — ${media.length} result(s) in ${Math.round((Date.now() - t0) / 1000)}s`, 'ok');
         this.ctx.onUpdate();
@@ -334,14 +398,18 @@ export class Runner {
 
     // A Flow frames-to-video scene needs its two images in the start and end slots, in that order.
     const slots = !gemini && item.videoMode === 'frames' ? ['start', 'end'] : [];
+    const inChat = []; // Gemini already has these in the open chat; the prompt names them instead
     for (const [i, name] of item.mentions.entries()) {
       if (this.stopRequested) throw new StopError();
       const asset = byName.get(name.toLowerCase());
       if (!asset) continue;
-      const slot = slots[i] || null;
+      const video = isVideoAsset(asset);
+      const slot = video ? null : slots[i] || null; // a clip can't be a start or end frame
+      if (await this.reuseUpload(asset, { tag, step, slot, inChat })) continue;
       step(`Uploading @${asset.name}${slot ? ` → ${slot} frame` : ''}`);
-      const dataUrl = await blobToDataUrl(asset.blob);
-      const r = await this.call('attachImage', { name: asset.name, dataUrl, type: asset.type, slot }, { timeoutMs: 120000, retries: 0 });
+      const r = video
+        ? await this.attachVideo(asset, (p) => step(`Uploading @${asset.name} · ${Math.round(p * 100)}%`))
+        : await this.call('attachImage', { name: asset.name, dataUrl: await blobToDataUrl(asset.blob), type: asset.type, slot }, { timeoutMs: 120000, retries: 0 });
       const where = slot ? ` as ${r.slotFound ? `${slot} frame` : `${slot} frame (slot not found — used upload order)`}` : '';
       log(
         `${tag} attached @${asset.name}${where} via ${r.method}${r.confirmed ? '' : ' (thumbnail not confirmed)'}${r.error ? ` — ${r.error}` : ''}${r.dialogClicks?.length ? ` · clicked ${r.dialogClicks.join(', ')}` : ''}`,
@@ -351,7 +419,7 @@ export class Runner {
     }
 
     step('Typing prompt');
-    let text = promptForFlow(item.prompt, assets.map((a) => a.name), s.mentionMode);
+    let text = promptForFlow(nameChatFiles(item.prompt, inChat), assets.map((a) => a.name), s.mentionMode);
     // Gemini has no ratio control; a chosen ratio goes into the prompt.
     const ratio = this.session.gemini?.aspect;
     if (gemini && ratio && ratio !== 'keep') text += `\n\nAspect ratio: ${ratio}.`;

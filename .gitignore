@@ -34,3 +34,6 @@ temp/
 
 # Private project notes (conversations, decisions, plans) — kept locally, never pushed
 claude-notes/
+
+# Launch video output (brag-slim)
+brag-output/

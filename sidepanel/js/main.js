@@ -2,7 +2,7 @@
 import { app, on, emit, persistSession } from './app.js';
 import { loadSettings, loadSession, listAssets } from './store.js';
 import { initAssets, addAssets, removeAllAssets } from './assets-ui.js';
-import { initPrompt, setMode } from './prompt-ui.js';
+import { initPrompt, setMode, aspectMismatch } from './prompt-ui.js';
 import { initFrames } from './frames-ui.js';
 import { initSettings, applyTheme } from './settings-ui.js';
 import { initZip, openZipPicker } from './zip-ui.js';
@@ -10,6 +10,7 @@ import { initPublish } from './publish-ui.js';
 import { initSplit } from './split-ui.js';
 import { generatedResults } from './results.js';
 import { Runner } from './runner.js';
+import { recordBalance, balance, balanceShortfall, currentPlan, estimate, PLANS } from './credits.js';
 import { SITES, findSiteTab, callAgent } from './site.js';
 import { $, el, pad, sanitizeSegment, splitPrompts, findMentions, fmtDuration, log, onLog, logLines, toast } from './utils.js';
 
@@ -169,7 +170,13 @@ function renderProgress() {
   const c = counts();
   const r = app.runner;
   $('progressBar').style.width = c.total ? `${(c.done / c.total) * 100}%` : '0%';
-  $('progressText').textContent = `${c.success} / ${c.total}${c.failed ? ` (FAILED ${c.failed})` : ''}`;
+  // Before anything has run, the dock says what Start will do instead of "0 / 0".
+  const idle = r.state === 'idle' && !c.done;
+  const ready = idle ? splitPrompts(app.session.promptText, app.settings.separator).length : 0;
+  $('progressText').textContent = idle
+    ? ready ? `Ready · ${ready} prompt${ready === 1 ? '' : 's'}` : 'Add a prompt to start'
+    : `${c.success} / ${c.total} done${c.failed ? ` · ${c.failed} failed` : ''}`;
+  $('progressBar').parentElement.hidden = idle;
   const parts = [];
   if (r.state !== 'idle' && r.startedAt) parts.push(`elapsed ${fmtDuration(Date.now() - r.startedAt)}`);
   const eta = r.state === 'running' ? r.eta() : null;
@@ -204,6 +211,7 @@ function renderControls() {
   const state = app.runner.state;
   $('btnStart').disabled = state === 'running';
   $('btnStartText').textContent = state === 'running' ? 'Running…' : state === 'paused' ? 'Resume' : 'Start';
+  $('btnStart').classList.toggle('resume', state === 'paused');
   $('btnPause').disabled = state !== 'running' || app.runner.pauseRequested;
   $('btnStop').disabled = state === 'idle';
   $('btnNewProject').disabled = state === 'running';
@@ -247,6 +255,24 @@ async function startRun(keepQueue = false) {
     if (same && q.length && !confirm('Every prompt in the queue has already run. Run them all again?')) return;
     app.session.queue = buildQueue();
     log(`Queue built: ${app.session.queue.length} prompt(s)`);
+  }
+  if (site() === 'flow') {
+    const short = balanceShortfall(app.session.queue.filter((i) => i.status === 'pending').length);
+    if (short && !confirm(`${short}
+
+OK: start anyway · Cancel: go back`)) {
+      log('Start cancelled: not enough Flow credits', 'warn');
+      scheduleRender();
+      return;
+    }
+  }
+  const ratioWarning = await aspectMismatch();
+  if (ratioWarning && !confirm(`${ratioWarning}
+
+OK: start anyway · Cancel: go back and change it`)) {
+    log('Start cancelled to change the aspect ratio', 'warn');
+    scheduleRender();
+    return;
   }
   if (!confirmSequentialPlan()) {
     log('Start cancelled at the sequential-frames confirmation', 'warn');
@@ -400,6 +426,7 @@ async function refreshConnection() {
     }
     $('btnOpenFlow').hidden = true;
     const info = await callAgent(tab.id, 'ping', { selectors: SITES[current].selectors(app.settings) }, { timeoutMs: 4000, retries: 1 });
+    if (current === 'flow') recordBalance(info);
     if (current === 'gemini') {
       if (info.hasPromptBox) show('ok', 'Gemini connected');
       else show('warn', 'Gemini open — prompt box not found (signed in?)');
@@ -407,6 +434,70 @@ async function refreshConnection() {
     else show('warn', info.isProject ? 'Flow project — prompt box not found' : 'Flow open — no project yet');
   } catch {
     show('warn', `${name} tab found — reload it once`);
+  }
+}
+
+// ---------------- credits left (top bar) ----------------
+const ago = (t) => {
+  const s = Math.round((Date.now() - t) / 1000);
+  return s < 60 ? 'just now' : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`;
+};
+
+function renderCreditBar() {
+  const plan = currentPlan();
+  const badge = $('planBadge');
+  badge.className = `plan-badge ${plan.id || ''}`;
+  badge.textContent = plan.id ? PLANS[plan.id] || plan.id : 'Plan ?';
+  badge.title = plan.id ? `Flow plan: ${PLANS[plan.id] || plan.id} (${plan.source})` : 'Plan not seen yet — open Flow, or set it in Settings';
+  const b = balance();
+  const bar = $('creditBar');
+  bar.classList.remove('low', 'empty');
+  if (!b) {
+    $('creditLeft').textContent = '—';
+    $('creditSub').textContent = 'Not shown yet — press ↻ with your Flow tab open';
+    return;
+  }
+  $('creditLeft').textContent = `${b.estimated ? '≈ ' : ''}${b.credits.toLocaleString()}`;
+  const e = estimate(1);
+  const perPrompt = e.unknown ? null : e.per * e.count;
+  const fits = perPrompt ? Math.floor(b.credits / perPrompt) : null;
+  if (b.credits === 0 || fits === 0) bar.classList.add('empty');
+  else if (fits != null && fits < 5) bar.classList.add('low');
+  $('creditSub').textContent = [
+    fits != null && `enough for ~${fits.toLocaleString()} prompt${fits === 1 ? '' : 's'} (${e.label}, x${e.count})`,
+    b.estimated ? `estimated after the last run · Flow read ${ago(b.at)}` : `updated ${ago(b.at)}`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+let creditsBusy = false;
+let lastDeep = 0;
+/**
+ * Read the credits left from the Flow tab. `deep` may open Flow's plan/account menu when the page
+ * doesn't show them; that's done on ↻, after a run, and at most every 10 minutes otherwise.
+ */
+async function refreshCredits({ deep = false, quiet = true } = {}) {
+  if (creditsBusy) return;
+  const tab = await findSiteTab('flow', { open: false }).catch(() => null);
+  if (!tab) {
+    if (!quiet) toast('Open your Flow tab to read the credits');
+    return;
+  }
+  creditsBusy = true;
+  $('creditBar').classList.toggle('busy', deep);
+  try {
+    const r = await callAgent(tab.id, 'balance', { open: deep && app.runner.state !== 'running' }, { timeoutMs: deep ? 15000 : 4000, retries: 0 });
+    if (deep) lastDeep = Date.now();
+    recordBalance(r);
+    if (!quiet) toast(r.credits != null ? `${r.credits.toLocaleString()} Flow credits left` : 'Flow didn’t show a credit balance — see Activity log', 4000);
+    if (!quiet && r.credits == null) log('Credits: Flow showed no balance on the page, the plan badge or the account menu. Open the menu that shows your credits once and press ↻ again.', 'warn');
+  } catch (e) {
+    if (!quiet) toast(`Could not read Flow: ${e.message}`, 5000);
+  } finally {
+    creditsBusy = false;
+    $('creditBar').classList.remove('busy');
+    renderCreditBar();
   }
 }
 
@@ -436,7 +527,11 @@ async function boot() {
       persistSession();
       scheduleRender();
     },
-    onState: scheduleRender,
+    onState: () => {
+      scheduleRender();
+      // A run just ended: read the real balance (the bar showed an estimate meanwhile).
+      if (app.runner.state !== 'running' && app.runner.site === 'flow') setTimeout(() => refreshCredits({ deep: true }), 2500);
+    },
     onStep: (text) => {
       lastStep = text;
       renderProgress();
@@ -493,12 +588,30 @@ async function boot() {
     $('logCount').textContent = '';
   });
   on('settingsChanged', scheduleRender);
+  on('estimateChanged', renderProgress); // fires on every prompt edit: keeps "Ready · N prompts" current
 
   renderAll();
   refreshConnection();
-  setInterval(() => {
-    if (app.runner.state !== 'running') refreshConnection();
+  on('creditsChanged', renderCreditBar);
+  on('estimateChanged', renderCreditBar);
+  on('settingsChanged', renderCreditBar);
+  $('btnRefreshCredits').addEventListener('click', () => refreshCredits({ deep: true, quiet: false }));
+  renderCreditBar();
+  setTimeout(() => !balance() && refreshCredits({ deep: true }), 4000);
+  let tick = 0;
+  setInterval(async () => {
+    tick++;
+    if (app.runner.state !== 'running') refreshConnection(); // its ping also reads the credits
+    else if (tick % 5 === 0) refreshCredits(); // every 15 s during a run, read-only
     if (app.runner.state !== 'idle') renderProgress();
+    renderCreditBar();
+    // Nothing on the page shows the credits: look in the menu now and then, but not while the user
+    // is on the Flow tab (menus would flash open under them).
+    const stale = !balance() || Date.now() - (balance().at || 0) > 10 * 60 * 1000;
+    if (app.runner.state === 'idle' && stale && Date.now() - lastDeep > 10 * 60 * 1000) {
+      const tab = await findSiteTab('flow', { open: false }).catch(() => null);
+      if (tab && !tab.active) refreshCredits({ deep: true });
+    }
   }, 3000);
   chrome.tabs.onActivated.addListener(() => app.runner.state !== 'running' && refreshConnection());
   log('FlowBatch ready');

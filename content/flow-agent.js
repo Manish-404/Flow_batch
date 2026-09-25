@@ -127,11 +127,13 @@
       }
       report.push(`${spec.name}: ${status}`);
     }
+    // While the settings are open, Flow shows what a generation costs.
+    const priced = { credits: readCredits(), model: readModelLabel(), ...readSummary(box), plan: detectPlan() };
     if (settingsOpened) {
       FB.pressKey(document.activeElement || document.body, 'Escape');
       await sleep(300);
     }
-    return { report };
+    return { report, priced };
   }
 
   // ---------- references ----------
@@ -274,6 +276,92 @@
     return { method, confirmed: !!confirmed, slotFound, dialogClicks, openDialogs: dialogs };
   }
 
+  // ---------- files Flow already has ----------
+  // Where a file picker shows up: dialogs, menus, listboxes and popover layers.
+  const PICKER =
+    '[role="dialog"], [role="menu"], [role="listbox"], mat-dialog-container, dialog[open], .cdk-overlay-pane, [popover], [class*="popover" i], [class*="picker" i], [class*="drawer" i]';
+  const PICKER_ITEM = 'img, video, [role="option"], [role="gridcell"], [role="menuitem"], [role="listitem"], li, figure, button, [role="button"], [title], [aria-label]';
+  const CLICKABLE = 'button, [role="button"], [role="option"], [role="gridcell"], [role="menuitem"], li, figure, [tabindex]';
+
+  const openPickers = () => $$(PICKER).filter((p) => isShown(p) && !FB.isOwn(p));
+
+  /** The item in a newly opened picker named like one of `names` (label, alt text, title or caption). */
+  function findPickerItem(names, known, composer) {
+    const re = new RegExp(`(^|[^A-Za-z0-9_-])(${names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?![A-Za-z0-9_-])`, 'i');
+    const hits = [];
+    for (const p of openPickers()) {
+      if (known.has(p) || (composer && p.contains(composer))) continue;
+      for (const el of $$(PICKER_ITEM, p)) {
+        if (isShown(el) && re.test(`${el.getAttribute('alt') || ''} ${labelOf(el)}`)) hits.push(el);
+      }
+    }
+    // The smallest match is the item itself, not the grid around it.
+    const item = hits.find((el) => !hits.some((o) => o !== el && el.contains(o)));
+    return item ? item.closest(CLICKABLE) || item : null;
+  }
+
+  async function closePickers() {
+    for (let i = 0; i < 2 && (FB.visibleDialogs().length || $$('[role="menu"], [role="listbox"], .cdk-overlay-pane').some(isShown)); i++) {
+      FB.pressKey(document.activeElement || document.body, 'Escape');
+      await sleep(300);
+    }
+  }
+
+  /**
+   * Add a file Flow already has — uploaded earlier — from the picker its add button (or a frame
+   * slot) opens, found by name, instead of uploading it again. Nothing is uploaded here: when no
+   * item matches, the picker is closed and `found: false` comes back.
+   */
+  async function attachExisting({ selectors, names, slot }) {
+    const box = FB.findPromptBox(selectors);
+    if (!box) throw new Error('Prompt box not found on the Flow page');
+    const composer = FB.findComposer(box);
+    const before = composerThumbCount(composer);
+    const slotTarget = slot ? FB.findFrameSlot(slot, selectors, box) : null;
+    const opener = (slotTarget && slotTarget.tagName !== 'INPUT' ? slotTarget : null) || FB.findAddButton(selectors, box);
+    if (!opener) return { found: false, slotFound: false };
+    const known = new Set(openPickers()); // pickers open before our click are not the file picker
+    const find = () => findPickerItem(names, known, composer);
+    const root = document.documentElement;
+    root.dataset.flowbatchCapture = '1'; // a file dialog the click opens is parked, not shown
+    let item = null;
+    try {
+      realClick(opener);
+      item = await waitFor(find, 2500, 200);
+      if (!item) {
+        // Some pickers list past files under a tab or menu entry.
+        const tab = FB.findOverlayItem(/^(library|uploads?|your (uploads|files|media)|recent|assets|media|my (files|media|uploads))\b/i);
+        if (tab) {
+          realClick(tab);
+          item = await waitFor(find, 2500, 200);
+        }
+      }
+      if (!item) {
+        const search = openPickers()
+          .filter((p) => !known.has(p))
+          .flatMap((p) => $$('input[type="search"], input[placeholder*="search" i], input[aria-label*="search" i]', p))
+          .find(isShown);
+        if (search) {
+          await FB.setText(search, names[0]);
+          item = await waitFor(find, 3000, 250);
+        }
+      }
+      if (item) realClick(item);
+    } finally {
+      delete root.dataset.flowbatchCapture;
+    }
+    if (!item) {
+      await closePickers();
+      return { found: false, slotFound: !!slotTarget };
+    }
+    const label = norm(`${item.getAttribute('alt') || ''} ${labelOf(item)}`).slice(0, 80);
+    await sleep(900);
+    const dialogClicks = await confirmUploadDialogs();
+    const confirmed = await waitFor(() => composerThumbCount(FB.findComposer(FB.findPromptBox(selectors))) > before, 15000, 400);
+    if ($$('[role="menu"], [role="listbox"]').some(isShown)) FB.pressKey(document.body, 'Escape');
+    return { found: true, confirmed: !!confirmed, slotFound: !!slotTarget, label, dialogClicks, openDialogs: FB.visibleDialogs().map((d) => norm(d.innerText).slice(0, 140)) };
+  }
+
   // ---------- batch uploads ----------
   /**
    * Hand every staged file (FB.stageChunk) to Flow in one go — all at once when its input
@@ -414,6 +502,116 @@
     };
   }
 
+  // ---------- plan and credits ----------
+  // The plan badge in Flow's header ("PRO", "ULTRA", …).
+  const PLAN = /^(?:google\s+)?(?:ai\s+)?(free|standard|plus|pro|ultra)(?:\s+plan)?$/i;
+  function detectPlan() {
+    const badge = $$('span, div, a, button, p, b, strong').find(
+      (el) => el.childElementCount === 0 && isShown(el) && !FB.isOwn(el) && el.getBoundingClientRect().top < 140 && PLAN.test(norm(el.textContent))
+    );
+    return badge ? norm(badge.textContent).match(PLAN)[1].toLowerCase() : null;
+  }
+
+  // "Generating will use 10 credits" — shown while the generation settings are open.
+  function readCredits() {
+    for (const t of FB.collectText(/\d[\d,]*\s+credits?\b/i, 160)) {
+      const m = t.match(/\b(?:will use|uses?|costs?|cost of)\s+(\d[\d,]*)\s+credits?\b/i);
+      if (m) return Number(m[1].replace(/,/g, ''));
+    }
+    return null;
+  }
+
+  // The model picker's current value, e.g. "Omni 1.1 Flash" or "Veo 3.1 - Fast".
+  function readModelLabel() {
+    const t = $$('[role="combobox"], mat-select, [aria-haspopup], button, select')
+      .filter((c) => isShown(c) && !FB.isOwn(c))
+      .map((c) => norm(c.tagName === 'SELECT' ? c.selectedOptions[0]?.text : c.innerText))
+      .find((x) => x && x.length < 40 && /\b(veo|omni|banana|imagen)\b/i.test(x));
+    return t ? t.replace(/\s*(arrow_drop_down|expand_more)\s*$/i, '') : null;
+  }
+
+  // The summary chip beside the send button: "Video · 720p · 6s x1".
+  function summaryChip(box) {
+    return FB.clickables(FB.findComposer(box) || document.body).find((b) => /\b\d{3,4}p\b|\b\d{1,2}\s?s\b.*x\s?[1-4]/i.test(norm(b.innerText))) || null;
+  }
+  function readSummary(box) {
+    const t = norm(summaryChip(box)?.innerText);
+    return {
+      mode: /\bvideo\b/i.test(t) ? 'video' : /\bimage/i.test(t) ? 'image' : null,
+      res: t.match(/\b(\d{3,4}p)\b/i)?.[1] || null,
+      duration: Number(t.match(/\b(\d{1,2})\s?s\b/i)?.[1]) || null,
+      count: Number(t.match(/\bx\s?([1-4])\b/i)?.[1]) || null,
+    };
+  }
+
+  // The credits left on the account ("12,340 AI credits", "Credits: 1.2K remaining"), ignoring
+  // what a generation costs ("Generating will use 10 credits").
+  const COST_WORDS = /\b(will use|uses?|costs?|per (generation|video|image|prompt)|generating)\b/i;
+  const toNumber = (n, k) => Math.round(Number(n.replace(/,/g, '')) * (k ? 1000 : 1));
+  function readBalance() {
+    for (const t of FB.collectText(/credit/i, 120)) {
+      if (COST_WORDS.test(t)) continue;
+      const m =
+        t.match(/(\d[\d,]*(?:\.\d+)?)\s*([kK])?\s*(?:ai\s+)?credits?\b/i) ||
+        t.match(/credits?\s*(?:left|remaining|available|balance)?\s*[:\-–]?\s*(\d[\d,]*(?:\.\d+)?)\s*([kK])?\b/i);
+      if (m) return toNumber(m[1], m[2]);
+    }
+    return null;
+  }
+
+  /**
+   * Credits left. Read from the page as it is; with `open`, when that finds nothing, the plan badge,
+   * a credits button or Flow's account menu is opened in turn, read and closed.
+   */
+  async function balance({ open = false } = {}) {
+    let credits = readBalance();
+    let via = credits != null ? 'page' : null;
+    if (credits == null && open) {
+      const header = (el) => el.getBoundingClientRect().top < 140;
+      const badge = $$('span, div, button, a').find((el) => el.childElementCount === 0 && isShown(el) && header(el) && PLAN.test(norm(el.textContent)));
+      const tries = [
+        badge?.closest('button, [role="button"], a:not([href^="http"])') || badge,
+        ...$$('button, [role="button"]').filter((b) => isShown(b) && /credit/i.test(`${b.getAttribute('aria-label') || ''} ${b.title || ''} ${norm(b.innerText)}`)),
+        ...$$('button, [role="button"]').filter((b) => isShown(b) && header(b) && /account|profile|avatar/i.test(`${b.getAttribute('aria-label') || ''} ${b.title || ''}`)),
+      ].filter((b, i, a) => b && !FB.isOwn(b) && a.indexOf(b) === i);
+      for (const b of tries.slice(0, 3)) {
+        realClick(b);
+        credits = (await waitFor(() => (readBalance() != null ? { n: readBalance() } : null), 2000, 200))?.n ?? null;
+        FB.pressKey(document.activeElement || document.body, 'Escape');
+        await sleep(300);
+        if (credits != null) {
+          via = 'menu';
+          break;
+        }
+      }
+    }
+    return { credits, plan: detectPlan(), via };
+  }
+
+  /**
+   * Plan, model, length, resolution and Flow's own credit cost. The cost only shows while the
+   * generation settings are open, so with `open` they are opened, read and closed again.
+   */
+  async function pricing({ selectors, open = true }) {
+    const box = FB.findPromptBox(selectors);
+    const read = () => ({ ...readSummary(box), credits: readCredits(), model: readModelLabel() });
+    let info = read();
+    let opened = false;
+    if (open && (info.credits == null || !info.model)) {
+      const btn = FB.findSettingsButton(selectors, box) || summaryChip(box);
+      if (btn) {
+        realClick(btn);
+        opened = true;
+        await waitFor(() => readCredits() != null, 2500, 200);
+        const now = read();
+        info = { ...info, ...Object.fromEntries(Object.entries(now).filter(([, v]) => v != null)) };
+        FB.pressKey(document.activeElement || document.body, 'Escape');
+        await sleep(300);
+      }
+    }
+    return { ...info, plan: detectPlan(), opened };
+  }
+
   // ---------- actions ----------
   const actions = {
     ping: ({ selectors }) => ({
@@ -421,6 +619,8 @@
       title: document.title,
       isProject: isProject(),
       hasPromptBox: !!FB.findPromptBox(selectors),
+      credits: readBalance(),
+      plan: detectPlan(),
     }),
 
     diagnose: ({ selectors }) => {
@@ -459,6 +659,21 @@
     applySettings,
     clearReferences,
     attachImage,
+    attachExisting,
+    pricing,
+    balance,
+
+    // Which of `names` the page shows (its project grid labels uploads by file name), ignoring
+    // the prompt box, where a name may just have been typed.
+    findNames: ({ selectors, names }) => {
+      const box = FB.findPromptBox(selectors);
+      const text = $$('img, video, [title], [aria-label], span, p, figcaption, div')
+        .filter((el) => isShown(el) && !FB.isOwn(el) && !(box && (box.contains(el) || el.contains(box))) && el.childElementCount <= 3)
+        .map((el) => [el.getAttribute('alt'), el.getAttribute('title'), el.getAttribute('aria-label'), el.childElementCount ? '' : el.textContent].filter(Boolean).join(' '))
+        .join('\n');
+      const found = names.filter((n) => new RegExp(`(^|[^A-Za-z0-9_-])${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![A-Za-z0-9_-])`, 'i').test(text));
+      return { found };
+    },
     stageChunk: FB.stageChunk,
     attachFiles,
     dropStaged: FB.dropStaged,
