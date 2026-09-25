@@ -8,7 +8,19 @@ and moves on to the next prompt.
 It also includes a frame extractor that turns a video into stills every N seconds — from a local file,
 a direct video URL, or by capturing whatever is playing in a browser tab.
 
+<p align="center">
+  <a href="docs/media/flowbatch-promo.mp4"><img src="docs/media/flowbatch-promo.jpg" width="720" alt="FlowBatch promo video — click to play"></a>
+  <br><sub>▶ <a href="docs/media/flowbatch-promo.mp4"><b>Watch the 21-second promo</b></a> — write 30 prompts, @mention your frames, press Start, walk away.</sub>
+</p>
+
 ## Screenshots
+
+<p align="center">
+  <img src="docs/media/screenshots-carousel.gif" width="760" alt="Slideshow of every FlowBatch screen">
+</p>
+
+<details>
+<summary><b>All screenshots</b> (click to expand)</summary>
 
 <p align="center">
   <img src="docs/screenshots/panel.png" width="300" alt="FlowBatch side panel with assets and prompts loaded">
@@ -59,6 +71,8 @@ a direct video URL, or by capturing whatever is playing in a browser tab.
 
 <sub><i>The panel is shown with placeholder images standing in for real video frames and Flow or Gemini output.</i></sub>
 
+</details>
+
 ## Install (unpacked)
 
 1. Open `chrome://extensions` and turn on **Developer mode** (top right).
@@ -89,6 +103,12 @@ After you edit any file, click **Reload** on the extension card and reload the F
 Other ways to add images: drag and drop them, browse for files, or **Choose folder instead**. Rename an image in its card
 and every `@mention` of it in your prompts is updated. Type `@` in the prompt box to pick an image from a list.
 Press `Ctrl + Enter` to insert a separator.
+
+**Video clips as references.** *Upload assets* also takes video clips (MP4, MOV, M4V, 3GP or AVI, up to 40 MB) that a
+prompt can `@mention`; **+ Assets** in the Split video card adds the clips you ticked. When Flow or Gemini already has
+a file, mark it **☁ In Flow?** (or all at once with **☁ All in Flow**) and a run reuses it instead of uploading it
+again: Flow picks it from its own file picker, and Gemini names the file already in the chat. Gemini keeps files per
+chat, so with *new chat per prompt* on, marked assets are still uploaded.
 
 ## Using Gemini instead of Flow
 
