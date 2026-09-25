@@ -1,0 +1,25 @@
+WEBVTT
+
+00:00:00.200 --> 00:00:04.300
+FlowBatch: how to use it, from one video to anime clips in Google Flow
+
+00:00:05.200 --> 00:00:08.900
+Set up: open your Flow project, then click the FlowBatch icon to open the side panel.
+
+00:00:09.200 --> 00:00:20.900
+Step 1 of 5: Split your video. Load it in Frame extractor, set Clip length to 7 s and press Split video.
+
+00:00:21.200 --> 00:00:32.900
+Step 2 of 5: Send the clips to Flow. Send to Flow uploads all 3 in one batch. Then + Assets lets you @mention them.
+
+00:00:33.200 --> 00:00:44.900
+Step 3 of 5: Write one prompt. Mention @clip_001, then press One prompt per asset: one prompt for every clip.
+
+00:00:45.200 --> 00:01:05.900
+Step 4 of 5: Press Start. FlowBatch picks each clip in Flow, types the prompt, submits it and waits for the video.
+
+00:01:06.700 --> 00:01:19.800
+Step 5 of 5: Your anime clips. Each result downloads by itself, one file per prompt, into your project folder.
+
+00:01:20.200 --> 00:01:26.000
+Split, Send to Flow, Prompt, Start, Download. Free Chrome extension: github.com/Manish-404/Flow_batch

@@ -383,6 +383,18 @@
     }
     .video-card video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; background: #0a0b0e; }
     .video-cap { margin: 18px auto 0; max-width: 46em; color: var(--muted); font-size: 15px; text-align: center; }
+    .walk { margin-top: 88px; scroll-margin-top: 96px; }
+    .walk-head { max-width: 720px; margin: 0 auto 26px; text-align: center; }
+    .walk-head h3 { margin: 0; font-size: clamp(1.45rem, 2.6vw, 2rem); line-height: 1.15; letter-spacing: -0.025em; }
+    .walk-head p { margin: 10px 0 0; color: var(--muted); font-size: 1.05rem; }
+    .chapters { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 60em; margin: 18px auto 0; padding: 0; list-style: none; }
+    .chapters a {
+      display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 14px;
+      border: 1px solid var(--border); border-radius: 999px; background: var(--card);
+      color: var(--text); font-size: 14px; font-weight: 500; text-decoration: none;
+    }
+    .chapters a:hover { border-color: var(--accent-line); }
+    .chapters time { color: var(--accent-text); font-weight: 700; font-variant-numeric: tabular-nums; }
 
     /* ---------- how it works ---------- */
     .how-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 64px; align-items: center; }
@@ -672,7 +684,7 @@
             <a class="btn btn-primary" href="https://github.com/Manish-404/Flow_batch/archive/refs/heads/main.zip"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Download FlowBatch</a>
             <a class="btn btn-ghost" href="https://github.com/Manish-404/Flow_batch"><svg class="i i-fill" aria-hidden="true"><use href="#i-gh"/></svg>View on GitHub</a>
           </div>
-          <p class="fine">Free · Chrome 116 or newer · No account needed · <a href="#install">Install steps</a></p>
+          <p class="fine">Free · Chrome 116 or newer · No account needed · <a href="#install">Install steps</a> · <a href="#walkthrough">1:26 walkthrough</a></p>
         </div>
 
         <div class="mock-stack">
@@ -726,6 +738,29 @@
           </video>
         </div>
         <p class="video-cap" id="video-cap">Write the prompts, @mention your frames, press Start. The video has music, so check your volume.</p>
+
+        <div class="walk" id="walkthrough">
+          <div class="walk-head">
+            <h3>Full walkthrough: from one video to anime clips</h3>
+            <p>1:26 · Split a video, send the clips to Flow, write one prompt, press Start, and get the results.</p>
+          </div>
+          <div class="video-card">
+            <video id="walk-video" controls preload="none" playsinline poster="media/flowbatch-walkthrough.jpg" width="1920" height="1080" aria-describedby="walk-cap">
+              <source src="media/flowbatch-walkthrough.mp4" type="video/mp4">
+              <track kind="captions" srclang="en" label="English" src="media/flowbatch-walkthrough.vtt">
+              <a href="media/flowbatch-walkthrough.mp4">Download the walkthrough video (MP4)</a>
+            </video>
+          </div>
+          <ol class="chapters" aria-label="Jump to a step in the walkthrough">
+            <li><a href="media/flowbatch-walkthrough.mp4#t=5" data-t="5"><time>0:05</time>Set up</a></li>
+            <li><a href="media/flowbatch-walkthrough.mp4#t=9" data-t="9"><time>0:09</time>Split the video</a></li>
+            <li><a href="media/flowbatch-walkthrough.mp4#t=21" data-t="21"><time>0:21</time>Send to Flow</a></li>
+            <li><a href="media/flowbatch-walkthrough.mp4#t=33" data-t="33"><time>0:33</time>One prompt</a></li>
+            <li><a href="media/flowbatch-walkthrough.mp4#t=45" data-t="45"><time>0:45</time>Press Start</a></li>
+            <li><a href="media/flowbatch-walkthrough.mp4#t=66" data-t="66"><time>1:06</time>The results</a></li>
+          </ol>
+          <p class="video-cap" id="walk-cap">Sped up. The side panel is the real extension and the anime clips are real Flow results; the Flow tab is rebuilt from a screenshot of the same session. Captions are available.</p>
+        </div>
       </div>
     </section>
 
@@ -1277,6 +1312,26 @@ Convert <span class="mention">@f_003</span> in the same style. Golden hour.</pre
         strip.addEventListener('scroll', update, { passive: true });
         window.addEventListener('resize', update);
         update();
+      }
+
+      /* Walkthrough chapters: jump the player to a step (the links open the MP4 at that time without JS) */
+      const walk = document.getElementById('walk-video');
+      if (walk) {
+        document.querySelectorAll('[data-t]').forEach((link) => link.addEventListener('click', (e) => {
+          e.preventDefault();
+          const t = Number(link.dataset.t);
+          const go = () => {
+            walk.currentTime = t;
+            walk.play().catch(() => {});
+          };
+          if (walk.readyState >= 1) go();
+          else {
+            walk.addEventListener('loadedmetadata', go, { once: true });
+            walk.preload = 'metadata';
+            walk.load();
+          }
+          walk.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
+        }));
       }
     })();
   </script>
