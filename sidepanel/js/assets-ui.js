@@ -5,7 +5,7 @@ import { putAsset, deleteAsset, clearAssets } from './store.js';
 import { openZipPicker } from './zip-ui.js';
 import { SITES, findSiteTab } from './site.js';
 import { FLOW_VIDEO_TYPES, FLOW_MAX_BYTES } from './split.js';
-import { cleanGeminiImage } from './mark-clean.js';
+import { cleanGeminiMedia } from './mark-clean.js';
 import { $, el, sanitizeName, sanitizeSegment, naturalCompare, isVideoAsset, assetFileName, geminiChatId, fmtBytes, log, toast } from './utils.js';
 
 const site = () => (app.session.site === 'gemini' ? 'gemini' : 'flow');
@@ -191,20 +191,21 @@ export async function removeAssets(ids) {
   emit('assetsChanged');
 }
 
-/** Remove the visible Gemini sparkle from image assets (ones downloaded from Gemini by hand). */
+/** Remove the visible Gemini sparkle from assets (images and Veo clips downloaded from Gemini by hand). */
 async function cleanAssets() {
-  const images = app.assets.filter((a) => !isVideoAsset(a));
-  if (!images.length) return toast('No image assets');
-  if (!confirm(`Look for the visible Gemini sparkle in ${plural(images.length, 'image')} and remove it where found?
+  const images = app.assets;
+  if (!images.length) return toast('No assets');
+  const clips = images.filter(isVideoAsset).length;
+  if (!confirm(`Look for the visible Gemini sparkle in ${plural(images.length, 'asset')} and remove it where found?
 
-Images without it are left as they are. Google's invisible SynthID watermark is not affected.`)) return;
+Files without it are left as they are.${clips ? ` Each video clip plays through once while it is cleaned, so ${plural(clips, 'clip')} take about as long as they run.` : ''} Google's invisible SynthID watermark is not affected.`)) return;
   const btn = $('btnCleanAssets');
   btn.disabled = true;
   let cleaned = 0;
   try {
     for (const [i, a] of images.entries()) {
       btn.textContent = `✦ ${i + 1}/${images.length}`;
-      const r = await cleanGeminiImage(a.blob);
+      const r = await cleanGeminiMedia(a.blob);
       if (!r.found) continue;
       URL.revokeObjectURL(a.thumbUrl);
       a.blob = r.blob;
@@ -220,8 +221,8 @@ Images without it are left as they are. Google's invisible SynthID watermark is 
   }
   renderAssets();
   emit('assetsChanged');
-  log(`Gemini sparkle removed from ${cleaned} of ${images.length} image asset(s)`, cleaned ? 'ok' : 'info');
-  toast(cleaned ? `Removed the Gemini sparkle from ${plural(cleaned, 'image')}` : 'No visible Gemini sparkle found');
+  log(`Gemini sparkle removed from ${cleaned} of ${images.length} asset(s)`, cleaned ? 'ok' : 'info');
+  toast(cleaned ? `Removed the Gemini sparkle from ${plural(cleaned, 'asset')}` : 'No visible Gemini sparkle found');
   return undefined;
 }
 

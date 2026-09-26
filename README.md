@@ -144,12 +144,14 @@ What is different from Flow:
   `Gemini replied without an image: “I can't create images of …”`. Gemini's daily limits apply;
   *Stop the queue after 3 failures in a row* ends a run that has hit one.
 - **Send to Gemini** in the Split video card attaches up to 10 clips at a time, Gemini's limit per message.
-- **The visible sparkle is removed** from downloaded Gemini images (*Settings → Remove the visible Gemini
-  sparkle*). FlowBatch finds the mark in the corner and, once it has seen a few, learns its exact pattern
-  and reverses the blend, so the real pixels come back rather than a patch; nothing outside that corner
-  changes. **✦ Clean** in Upload assets does the same for Gemini images you downloaded yourself. Only the
-  visible logo goes: Google's invisible **SynthID** watermark stays in the image, so it can still be
-  identified as AI-generated.
+- **The visible sparkle is removed** from downloaded Gemini images and Veo videos (*Settings → Remove the
+  visible Gemini sparkle*). The sparkle is a flat, semi-transparent star in a fixed corner spot. FlowBatch
+  finds it, learns its exact shape, measures its opacity at the star's own edge, and reverses the blend, so the
+  real pixels come back instead of a patch. Nothing outside that spot changes, and files without the mark are
+  saved as they are. A video is first sampled at 24 points to learn the mark, then played through once and
+  re-recorded as MP4 with its audio, so it takes about as long as the clip. **✦ Clean** in Upload assets does
+  the same for images and clips you downloaded yourself. Only the visible logo goes: Google's invisible
+  **SynthID** watermark stays in the file, so it can still be identified as AI-generated.
 
 When Gemini is selected, Settings shows **Gemini elements** — prompt box, send button, upload (+),
 Tools, model picker and New chat — with the same Diagnose / Pick / Test tools as Flow.

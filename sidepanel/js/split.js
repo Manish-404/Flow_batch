@@ -90,7 +90,7 @@ function playUntil(video, t, signal) {
  * Route the source's audio into the recording without playing it through the speakers.
  * Muting the element instead would silence the captured track too.
  */
-async function silentAudioTracks(video) {
+export async function silentAudioTracks(video) {
   const ctx = new AudioContext();
   const source = ctx.createMediaElementSource(video);
   const dest = ctx.createMediaStreamDestination();

@@ -3,7 +3,7 @@
 import { MODELS, GEMINI_MODELS } from './store.js';
 import { SITES, findSiteTab, callAgent, stageFiles, pinTab, unpinTab, waitTabComplete } from './site.js';
 import { downloadMedia, fetchMediaBlob } from './downloads.js';
-import { cleanGeminiImage } from './mark-clean.js';
+import { cleanGeminiMedia } from './mark-clean.js';
 import { recordFlowInfo, spendOne } from './credits.js';
 import { sleep, log, pad, slug, sanitizeSegment, promptForFlow, blobToDataUrl, isVideoAsset, assetFileName, geminiChatId } from './utils.js';
 
@@ -626,13 +626,20 @@ export class Runner {
     return clean ? clean(blob) : blob;
   }
 
-  /** For a Gemini image (with the setting on): a blob → blob step that removes the visible sparkle. */
+  /**
+   * For a Gemini image or Veo video (with the setting on): a blob → blob step that removes the
+   * visible sparkle. A video is re-recorded, so it takes about as long as the clip.
+   */
   markRemover(res, tag) {
-    if (res.site !== 'gemini' || res.kind !== 'image' || !this.settings.geminiRemoveMark) return undefined;
+    if (res.site !== 'gemini' || !/^(image|video)$/.test(res.kind) || !this.settings.geminiRemoveMark) return undefined;
     return async (blob) => {
-      const r = await cleanGeminiImage(blob);
+      if (tag && res.kind === 'video') this.ctx.onStep(`${tag} · removing the Gemini sparkle from the video (plays through once)`);
+      const r = await cleanGeminiMedia(blob);
       res.mark = r.found ? 'removed' : 'none';
-      if (tag) log(r.found ? `${tag} Gemini sparkle removed (${r.method})` : `${tag} no visible Gemini sparkle found — saved as is`);
+      if (tag) {
+        const how = r.method || (r.frames ? `${r.cleaned}/${r.frames} frames` : '');
+        log(r.found ? `${tag} Gemini sparkle removed${how ? ` (${how})` : ''}` : `${tag} no visible Gemini sparkle found — saved as is${r.error ? ` (${r.error})` : ''}`);
+      }
       return r.blob;
     };
   }
