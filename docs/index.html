@@ -444,6 +444,129 @@
     }
     .how-arrow .i { width: 12px; height: 12px; }
 
+    /* ---------- from one video to a story (dark in both themes, like a screening room) ---------- */
+    .cinema {
+      --bg: #07080b;
+      --card: #121319;
+      --border: #22232c;
+      --border-strong: #30313b;
+      --text: #ececf1;
+      --muted: #9a9cab;
+      --faint: #6f7180;
+      --accent: #7c6ff7;
+      --accent-text: #a99fff;
+      --accent-soft: rgba(124, 111, 247, 0.15);
+      --accent-line: rgba(124, 111, 247, 0.45);
+      --glow-a: rgba(124, 111, 247, 0.2);
+      --glow-b: rgba(56, 132, 246, 0.12);
+      --code-bg: #1a1b21;
+      --p-bg: #0e0f13;
+      --p-card: #16171c;
+      --p-field: #1f2027;
+      --p-border: #25262e;
+      color-scheme: dark;
+      position: relative; overflow: hidden; overflow: clip;
+      background: var(--bg); color: var(--text); border-bottom: 1px solid var(--border);
+    }
+    .cinema::before {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      background:
+        radial-gradient(760px 380px at 50% 0%, var(--glow-a), transparent 70%),
+        radial-gradient(520px 320px at 92% 88%, var(--glow-b), transparent 70%);
+    }
+    .cinema > .wrap { position: relative; }
+    .pipe { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin: 0; padding: 0; list-style: none; }
+    @media (max-width: 1040px) { .pipe { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 620px) { .pipe { grid-template-columns: minmax(0, 1fr); } }
+    .stage { position: relative; padding: 16px 16px 22px; border-radius: 18px; background: var(--card); border: 1px solid var(--border); }
+    @media (min-width: 1041px) {
+      .stage:not(:last-child)::after {
+        content: ""; position: absolute; top: 82px; right: -15px; z-index: 1; width: 9px; height: 9px;
+        border-top: 2px solid var(--faint); border-right: 2px solid var(--faint); transform: rotate(45deg);
+      }
+    }
+    .viz {
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+      height: 164px; margin-bottom: 18px; padding: 14px; overflow: hidden;
+      border-radius: 12px; background: var(--p-bg); border: 1px solid var(--p-border);
+    }
+    .viz-cap { color: var(--muted); font: 12px/1.3 var(--mono); text-align: center; }
+    .stage-tag { display: flex; align-items: center; gap: 9px; margin: 0 0 8px; color: var(--muted); font-size: 13px; font-weight: 600; }
+    .stage-tag b {
+      display: grid; place-items: center; width: 24px; height: 24px; flex: none; border-radius: 8px;
+      background: var(--accent-soft); color: var(--accent-text); font-size: 12.5px;
+    }
+    .stage h3 { margin: 0 0 6px; font-size: 1.16rem; letter-spacing: -0.015em; }
+    .stage p { margin: 0; color: var(--muted); font-size: 15px; }
+    /* Placeholder art: soft "photo" frames and hard-edged, cel-shaded "anime" images */
+    .tile { position: relative; display: block; border-radius: 6px; }
+    .ph { background: radial-gradient(circle at 68% 30%, rgba(255, 255, 255, 0.28) 0 22%, transparent 23%), linear-gradient(165deg, var(--c1), var(--c2)); }
+    .an {
+      background: radial-gradient(circle at 68% 30%, rgba(255, 255, 255, 0.9) 0 15%, transparent 15.5%), linear-gradient(135deg, var(--c1) 0 55%, var(--c2) 55%);
+      box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.28);
+    }
+    .k1 { --c1: #2e7bc4; --c2: #1d2b6e; }
+    .k2 { --c1: #4a3fc4; --c2: #291e6b; }
+    .k3 { --c1: #7f34c4; --c2: #3e1a6e; }
+    .k4 { --c1: #c2349a; --c2: #5c1a4f; }
+    .k5 { --c1: #c2344f; --c2: #5c1626; }
+    .k6 { --c1: #c45a2a; --c2: #5c2a14; }
+    .k7 { --c1: #a8942a; --c2: #4d4414; }
+    .k8 { --c1: #5ea82a; --c2: #2c5214; }
+    .tile[data-l]::after {
+      content: attr(data-l); position: absolute; left: 6px; bottom: 6px; padding: 3px 6px; border-radius: 5px;
+      background: rgba(0, 0, 0, 0.62); color: #fff; font: 700 10px/1 var(--font); letter-spacing: 0.06em; text-transform: uppercase;
+    }
+    .film {
+      display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; width: 100%; max-width: 230px;
+      padding: 12px 7px; border-radius: 6px;
+      background:
+        linear-gradient(90deg, #34353f 0 5px, transparent 5px 11px) 4px 4px / 11px 4px repeat-x,
+        linear-gradient(90deg, #34353f 0 5px, transparent 5px 11px) 4px calc(100% - 4px) / 11px 4px repeat-x,
+        #030304;
+    }
+    .film .tile { aspect-ratio: 9 / 16; border-radius: 3px; }
+    .morph { display: flex; align-items: center; gap: 12px; }
+    .morph .tile { width: 58px; aspect-ratio: 3 / 4; border-radius: 8px; }
+    .morph .i, .scene-frames .i { width: 18px; height: 18px; color: var(--faint); }
+    .pairs { display: grid; grid-template-columns: repeat(2, auto); gap: 8px 10px; }
+    .pair {
+      display: flex; align-items: center; gap: 4px; padding: 5px; border-radius: 9px;
+      border: 1px solid var(--accent-line); background: var(--accent-soft); color: var(--accent-text); font-size: 11px;
+    }
+    .pair .tile { width: 22px; aspect-ratio: 3 / 4; border-radius: 4px; }
+    .clips { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; width: 100%; max-width: 210px; padding-bottom: 12px; }
+    .clip { position: relative; aspect-ratio: 3 / 4; border-radius: 6px; background: linear-gradient(180deg, var(--from), var(--to)); }
+    .clip::before {
+      content: ""; position: absolute; left: 50%; top: 50%; transform: translate(-35%, -50%);
+      border-style: solid; border-width: 6px 0 6px 10px; border-color: transparent transparent transparent rgba(255, 255, 255, 0.92);
+    }
+    .clips::after {
+      content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; border-radius: 3px;
+      background: linear-gradient(90deg, var(--accent) 0 38%, var(--p-field) 38%);
+    }
+    .board-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 32px; margin: 72px 0 22px; }
+    .board-head h3 { margin: 0; font-size: clamp(1.45rem, 2.6vw, 1.9rem); line-height: 1.15; letter-spacing: -0.025em; }
+    .board-head p { margin: 0; max-width: 34em; color: var(--muted); font-size: 15.5px; }
+    .board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: 0; padding: 0; list-style: none; }
+    @media (max-width: 1040px) { .board { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 620px) { .board { grid-template-columns: minmax(0, 1fr); } }
+    .scene { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 16px; background: var(--p-card); border: 1px solid var(--p-border); }
+    .scene-frames { display: grid; grid-template-columns: minmax(0, 140px) auto minmax(0, 140px); align-items: center; gap: 8px; }
+    .scene-frames .tile { aspect-ratio: 3 / 4; border-radius: 10px; }
+    @media (max-width: 620px) { .scene-frames { grid-template-columns: minmax(0, 104px) auto minmax(0, 104px); } }
+    .scene-no { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0; font-size: 13.5px; font-weight: 700; }
+    .scene-no span { color: var(--muted); font: 500 12px/1.3 var(--mono); }
+    .scene-text { flex: 1; margin: 0; font-size: 14.5px; line-height: 1.6; }
+    .scene-file {
+      margin: 0; padding-top: 10px; border-top: 1px solid var(--p-border);
+      color: var(--muted); font: 12px/1.4 var(--mono); overflow-wrap: anywhere;
+    }
+    .story-notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+    @media (max-width: 900px) { .story-notes { grid-template-columns: minmax(0, 1fr); } }
+    .story-notes p { margin: 0; padding: 16px 18px; border-radius: 14px; border: 1px dashed var(--border-strong); color: var(--muted); font-size: 14.5px; }
+    .story-notes b { color: var(--text); }
+
     /* ---------- features ---------- */
     .feature {
       display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 72px; align-items: center;
@@ -681,6 +804,7 @@
       <a class="brand" href="#top"><img src="assets/icon-128.png" width="28" height="28" alt=""><span>FlowBatch</span></a>
       <nav class="nav" aria-label="Sections">
         <a href="#how">How it works</a>
+        <a href="#story">Story</a>
         <a href="#features">Features</a>
         <a href="#install">Install</a>
         <a href="#faq">FAQ</a>
@@ -856,6 +980,101 @@ Convert <span class="mention">@f_003</span> in the same style. Golden hour.</pre
               <li><span class="sw s3"></span><span>003_f_003.png</span><span class="st"></span></li>
             </ul>
           </figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="section cinema" id="story" aria-labelledby="story-title">
+      <div class="wrap">
+        <div class="section-head center">
+          <p class="kicker">From one video to a story</p>
+          <h2 id="story-title">Turn one video into an animated story</h2>
+          <p class="sub">Pull frames out of a video, turn each frame into an image, then connect the images with prompts that tell a story. Flow animates every scene from one image to the next, and FlowBatch saves the scenes in order.</p>
+        </div>
+
+        <ol class="pipe">
+          <li class="stage">
+            <div class="viz" aria-hidden="true">
+              <div class="film"><span class="tile ph k1"></span><span class="tile ph k2"></span><span class="tile ph k3"></span><span class="tile ph k4"></span><span class="tile ph k5"></span><span class="tile ph k6"></span></div>
+              <span class="viz-cap">ride.mp4 · a frame every 0.5 s</span>
+            </div>
+            <div class="stage-tag"><b>1</b>Frame extractor</div>
+            <h3>Pull the frames</h3>
+            <p>Load a video file, a direct link or a playing tab, and pick an interval. Each step becomes a still named <code>f_001</code>, <code>f_002</code> and so on, ready in your images.</p>
+          </li>
+          <li class="stage">
+            <div class="viz" aria-hidden="true">
+              <div class="morph"><span class="tile ph k1"></span><svg class="i"><use href="#i-right"/></svg><span class="tile an k1"></span></div>
+              <span class="viz-cap">f_001 → anime image</span>
+            </div>
+            <div class="stage-tag"><b>2</b>Image mode</div>
+            <h3>Create the images</h3>
+            <p>Write one prompt with <code>{asset}</code>, like <i>Convert {asset} into a 2D anime illustration</i>, and press <b>One prompt per asset</b>. Every frame gets its own prompt, and every image is saved as it finishes.</p>
+          </li>
+          <li class="stage">
+            <div class="viz" aria-hidden="true">
+              <div class="pairs">
+                <span class="pair"><span class="tile an k1"></span>→<span class="tile an k2"></span></span>
+                <span class="pair"><span class="tile an k3"></span>→<span class="tile an k4"></span></span>
+                <span class="pair"><span class="tile an k5"></span>→<span class="tile an k6"></span></span>
+                <span class="pair"><span class="tile an k7"></span>→<span class="tile an k8"></span></span>
+              </div>
+              <span class="viz-cap">pic_001 … pic_008 · 4 scenes</span>
+            </div>
+            <div class="stage-tag"><b>3</b>Video mode · Sequential frames</div>
+            <h3>Connect them with a story</h3>
+            <p><b>Use these images for video</b> brings the images back as <code>pic_001</code>, <code>pic_002</code> and so on. <b>One prompt per frame pair</b> turns each pair into a scene, from a start image to an end image. Then write each scene as the next line of your story.</p>
+          </li>
+          <li class="stage">
+            <div class="viz" aria-hidden="true">
+              <div class="clips">
+                <span class="clip" style="--from: #2e7bc4; --to: #4a3fc4"></span>
+                <span class="clip" style="--from: #7f34c4; --to: #c2349a"></span>
+                <span class="clip" style="--from: #c2344f; --to: #c45a2a"></span>
+                <span class="clip" style="--from: #a8942a; --to: #5ea82a"></span>
+              </div>
+              <span class="viz-cap">001 → 004 · in story order</span>
+            </div>
+            <div class="stage-tag"><b>4</b>Start · Frames to video in Flow</div>
+            <h3>Collect the scenes</h3>
+            <p>FlowBatch runs each scene through Flow's <b>Frames to video</b>, one after another, and saves the clips in story order. Play them back to back, or join them in any video editor.</p>
+          </li>
+        </ol>
+
+        <div class="board-head">
+          <h3>The story, one scene per pair</h3>
+          <p>Each prompt starts on one image and ends on the next. Because the frames come from one video, each scene picks up close to where the last one ended.</p>
+        </div>
+        <ol class="board">
+          <li class="scene">
+            <div class="scene-frames" aria-hidden="true"><span class="tile an k1" data-l="Start"></span><svg class="i"><use href="#i-right"/></svg><span class="tile an k2" data-l="End"></span></div>
+            <p class="scene-no">Scene 1<span>pic_001 → pic_002</span></p>
+            <p class="scene-text"><span class="mention">@pic_001</span> <span class="mention">@pic_002</span> Night in the city. The rider pulls away from the curb, headlights sweeping across the wet street.</p>
+            <p class="scene-file">001_pic_001_pic_002.mp4</p>
+          </li>
+          <li class="scene">
+            <div class="scene-frames" aria-hidden="true"><span class="tile an k3" data-l="Start"></span><svg class="i"><use href="#i-right"/></svg><span class="tile an k4" data-l="End"></span></div>
+            <p class="scene-no">Scene 2<span>pic_003 → pic_004</span></p>
+            <p class="scene-text"><span class="mention">@pic_003</span> <span class="mention">@pic_004</span> The rider leans into the corner. The camera drops low beside the front wheel as neon streaks past.</p>
+            <p class="scene-file">002_pic_003_pic_004.mp4</p>
+          </li>
+          <li class="scene">
+            <div class="scene-frames" aria-hidden="true"><span class="tile an k5" data-l="Start"></span><svg class="i"><use href="#i-right"/></svg><span class="tile an k6" data-l="End"></span></div>
+            <p class="scene-no">Scene 3<span>pic_005 → pic_006</span></p>
+            <p class="scene-text"><span class="mention">@pic_005</span> <span class="mention">@pic_006</span> Onto the bridge. Wind pulls at the jacket, and the skyline opens up behind the rider.</p>
+            <p class="scene-file">003_pic_005_pic_006.mp4</p>
+          </li>
+          <li class="scene">
+            <div class="scene-frames" aria-hidden="true"><span class="tile an k7" data-l="Start"></span><svg class="i"><use href="#i-right"/></svg><span class="tile an k8" data-l="End"></span></div>
+            <p class="scene-no">Scene 4<span>pic_007 → pic_008</span></p>
+            <p class="scene-text"><span class="mention">@pic_007</span> <span class="mention">@pic_008</span> First light over the water. The rider slows down, turns and looks back at the city.</p>
+            <p class="scene-file">004_pic_007_pic_008.mp4</p>
+          </li>
+        </ol>
+        <div class="story-notes">
+          <p><b>Keep the look the same.</b> Use the same style words in every scene, like <i>2D anime, cel-shaded, soft rim light</i>, so the scenes match.</p>
+          <p><b>Place the images yourself.</b> Put <code>{start}</code> and <code>{end}</code> in the first prompt, like <i>From {start} the rider pulls away, ending on {end}</i>, and each scene gets its own pair in those places.</p>
+          <p><b>An odd image out.</b> With an odd number of images, the last one becomes a scene of its own using <i>Ingredients to video</i>. FlowBatch tells you before anything runs.</p>
         </div>
       </div>
     </section>
