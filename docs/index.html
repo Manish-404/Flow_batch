@@ -637,7 +637,7 @@
       .feature { grid-template-columns: minmax(0, 1fr); gap: 32px; padding: 48px 0; }
       .feature:nth-of-type(even) .feature-copy { order: 0; }
     }
-    .f-kicker { margin: 0 0 10px; color: var(--accent-text); font-size: 14.5px; font-weight: 600; }
+    .feature-copy > .f-kicker { margin: 0 0 10px; color: var(--accent-text); font-size: 14.5px; font-weight: 600; }
     .feature h3 { margin: 0 0 14px; font-size: clamp(1.6rem, 2.8vw, 2.15rem); line-height: 1.12; letter-spacing: -0.03em; }
     .feature-copy > p { margin: 0; color: var(--muted); }
     .ticks { display: grid; gap: 11px; margin: 22px 0 0; padding: 0; list-style: none; }
@@ -647,6 +647,23 @@
       background: var(--accent-soft) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c6ff7' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 12.5 4 4 8-9'/%3E%3C/svg%3E") center / 11px no-repeat;
     }
     .feature-shot { width: 100%; max-width: 440px; margin-inline: auto; }
+    .feature-copy > .f-note {
+      margin-top: 18px; padding: 12px 14px; border-radius: 12px; font-size: 14.5px;
+      background: var(--card); border: 1px solid var(--border);
+    }
+    .f-note b { color: var(--text); }
+    /* Gemini sparkle removal: a before/after drawn in the page's placeholder style */
+    .wm-demo {
+      display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 14px;
+      padding: 22px 20px 18px; border-radius: 18px; background: var(--p-bg); border: 1px solid var(--p-border); box-shadow: var(--shadow-lg);
+    }
+    .wm-pane { display: grid; gap: 10px; justify-items: center; margin: 0; }
+    .wm-img { position: relative; display: block; width: 100%; aspect-ratio: 3 / 4; overflow: hidden; border-radius: 12px; }
+    .wm-mark { position: absolute; right: 7%; bottom: 5%; width: 15%; height: auto; aspect-ratio: 1; fill: rgba(255, 255, 255, 0.6); }
+    .wm-spot { position: absolute; right: 4%; bottom: 2.5%; width: 21%; aspect-ratio: 1; border: 1.5px dashed rgba(255, 255, 255, 0.8); border-radius: 8px; }
+    .wm-pane figcaption { color: var(--muted); font-size: 13px; font-weight: 600; text-align: center; }
+    .wm-arrow { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: var(--btn); color: #fff; }
+    .wm-arrow .i { width: 18px; height: 18px; }
     .shot {
       position: relative; display: block; overflow: hidden; border-radius: 18px;
       background: var(--shot-bg); border: 1px solid var(--shot-border); box-shadow: var(--shadow-lg);
@@ -863,6 +880,7 @@
     <symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m6 6 12 12"/></symbol>
     <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></symbol>
     <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+    <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 2c.8 5.5 4.5 9.2 10 10-5.5.8-9.2 4.5-10 10-.8-5.5-4.5-9.2-10-10 5.5-.8 9.2-4.5 10-10z"/></symbol>
     <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 2.8l2.83 5.73 6.32.92-4.57 4.46 1.08 6.3L12 17.24l-5.66 2.97 1.08-6.3L2.85 9.45l6.32-.92z"/></symbol>
   </svg>
 
@@ -1267,6 +1285,33 @@ Convert <span class="mention">@f_003</span> in the same style. Golden hour.</pre
               <img src="screenshots/gemini.png" width="1572" height="1516" loading="lazy" decoding="async" alt="Generation options with Gemini selected: Image mode, no ratio set, and the Thinking model">
               <span class="zoom"><svg class="i" aria-hidden="true"><use href="#i-expand"/></svg>Full size</span>
             </a>
+          </div>
+        </article>
+
+        <article class="feature">
+          <div class="feature-copy">
+            <p class="f-kicker">Gemini downloads</p>
+            <h3>No sparkle in the corner</h3>
+            <p>Gemini stamps a small sparkle in the corner of its images and Veo videos. FlowBatch takes it off as it saves each file. It learns the mark's exact shape and how strongly it's blended in, then reverses the blend, so the original pixels come back instead of a smudge.</p>
+            <ul class="ticks">
+              <li>Only the sparkle's spot changes, and files without the mark are saved as they are</li>
+              <li>Veo videos too: each one plays through once and is re-recorded with its audio</li>
+              <li><b>✦ Clean</b> in Upload assets does the same for files you downloaded yourself</li>
+            </ul>
+            <p class="f-note">Only the visible logo goes. Google's invisible <b>SynthID</b> watermark stays in the file, so it can still be identified as AI-generated. Label AI content where you post it. The cleaning is on by default for Gemini downloads, and you can switch it off in Settings.</p>
+          </div>
+          <div class="feature-shot">
+            <div class="wm-demo" role="img" aria-label="Before and after: an image from Gemini with a sparkle in its bottom-right corner, and the same image saved by FlowBatch with that corner clean.">
+              <figure class="wm-pane" aria-hidden="true">
+                <span class="wm-img an k3"><svg class="wm-mark"><use href="#i-sparkle"/></svg></span>
+                <figcaption>From Gemini</figcaption>
+              </figure>
+              <span class="wm-arrow" aria-hidden="true"><svg class="i"><use href="#i-right"/></svg></span>
+              <figure class="wm-pane" aria-hidden="true">
+                <span class="wm-img an k3"><span class="wm-spot"></span></span>
+                <figcaption>Saved by FlowBatch</figcaption>
+              </figure>
+            </div>
           </div>
         </article>
 
