@@ -401,6 +401,18 @@
       color: var(--text); font-size: 14px; font-weight: 500; text-decoration: none;
     }
     .social b { color: var(--accent-text); font-weight: 700; }
+    .reels { margin-top: 72px; }
+    .embed-note { max-width: 46em; margin: 0 auto 18px; text-align: center; color: var(--muted); font-size: 14px; }
+    .reel-load-wrap { text-align: center; margin: 0 0 28px; }
+    .reel-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; max-width: 60em; margin: 0 auto; }
+    @media (max-width: 700px) { .reel-grid { grid-template-columns: minmax(0, 1fr); } }
+    .reel-card { border-radius: 22px; overflow: hidden; background: var(--card); border: 1px solid var(--border); min-width: 0; }
+    .reel-static { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 44px 20px; text-align: center; min-height: 240px; }
+    .reel-badge { width: 52px; height: 52px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-text); display: grid; place-items: center; font-size: 21px; }
+    .reel-static p { margin: 0; color: var(--text); font-weight: 600; }
+    .reel-static a { color: var(--accent-text); font-size: 14px; text-decoration: none; }
+    .reel-static a:hover { text-decoration: underline; }
+    .reel-embed { max-width: 100%; overflow-x: auto; }
     .chapters time { color: var(--accent-text); font-weight: 700; font-variant-numeric: tabular-nums; }
 
     /* ---------- how it works ---------- */
@@ -775,6 +787,26 @@
           </ul>
           <p class="video-cap" id="walk-cap">Sped up. The side panel is the real extension and the anime clips are real Flow results; the Flow tab is rebuilt from a screenshot of the same session. It ends with the finished Reel as posted on Instagram. Captions are available.</p>
         </div>
+
+        <div class="reels" id="more-reels">
+          <div class="walk-head">
+            <h3>More from @bidibambudum</h3>
+            <p>A few more reels from the same account, played with Instagram's own player &mdash; song name and mute button included.</p>
+          </div>
+          <p class="embed-note">Nothing is requested from Instagram until you press Load. Instagram then sets its own cookies for that reel and may show you ads.</p>
+          <div class="reel-load-wrap">
+            <button type="button" class="btn btn-ghost btn-sm" id="btnLoadReels" aria-controls="reelGrid" aria-expanded="false">Load Instagram reels</button>
+          </div>
+          <div class="reel-grid" id="reelGrid">
+            <div class="reel-card" data-reel-url="https://www.instagram.com/reel/DduLARnT2F5/">
+              <div class="reel-static">
+                <span class="reel-badge" aria-hidden="true">&#9654;</span>
+                <p>Reel by @bidibambudum</p>
+                <a href="https://www.instagram.com/reel/DduLARnT2F5/">Open on Instagram</a>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -1135,7 +1167,7 @@ Convert <span class="mention">@f_003</span> in the same style. Golden hour.</pre
             <dd>To show FlowBatch beside the page you're working on.</dd>
           </dl>
         </details>
-        <p class="p-note">This website has no cookies, analytics or third-party scripts either.</p>
+        <p class="p-note">This website has no cookies or analytics of its own. The Instagram reels on this page load from Instagram, which sets its own cookies, only if you press Load.</p>
       </div>
     </section>
 
@@ -1346,6 +1378,32 @@ Convert <span class="mention">@f_003</span> in the same style. Golden hour.</pre
           }
           walk.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
         }));
+      }
+
+      /* More reels: click-to-load, official embed.js. Nothing is requested from Instagram before this click. */
+      const btnReels = document.getElementById('btnLoadReels');
+      const reelGrid = document.getElementById('reelGrid');
+      if (btnReels && reelGrid) {
+        btnReels.addEventListener('click', () => {
+          [...reelGrid.querySelectorAll('.reel-card[data-reel-url]')].forEach((card) => {
+            const url = card.dataset.reelUrl;
+            card.innerHTML = `<div class="reel-embed"><blockquote class="instagram-media" data-instgrm-permalink="${url}" data-instgrm-version="14" style="margin:0;width:100%"><a href="${url}" target="_blank" rel="noopener">View this reel on Instagram</a></blockquote></div>`;
+          });
+          const process = () => window.instgrm && window.instgrm.Embeds.process();
+          if (window.instgrm) {
+            process();
+          } else {
+            const s = document.createElement('script');
+            s.src = 'https://www.instagram.com/embed.js';
+            s.async = true;
+            s.onload = process;
+            document.body.appendChild(s);
+          }
+          btnReels.setAttribute('aria-expanded', 'true');
+          btnReels.hidden = true;
+          reelGrid.setAttribute('tabindex', '-1');
+          reelGrid.focus({ preventScroll: true });
+        });
       }
     })();
   </script>
