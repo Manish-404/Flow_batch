@@ -521,27 +521,8 @@
     }
     .how-arrow .i { width: 12px; height: 12px; }
 
-    /* ---------- from one video to a story (dark in both themes, like a screening room) ---------- */
+    /* ---------- from one video to a story (follows the page's light or dark theme) ---------- */
     .cinema {
-      --bg: #07080b;
-      --card: #121319;
-      --border: #22232c;
-      --border-strong: #30313b;
-      --text: #ececf1;
-      --muted: #9a9cab;
-      --faint: #6f7180;
-      --accent: #7c6ff7;
-      --accent-text: #a99fff;
-      --accent-soft: rgba(124, 111, 247, 0.15);
-      --accent-line: rgba(124, 111, 247, 0.45);
-      --glow-a: rgba(124, 111, 247, 0.2);
-      --glow-b: rgba(56, 132, 246, 0.12);
-      --code-bg: #1a1b21;
-      --p-bg: #0e0f13;
-      --p-card: #16171c;
-      --p-field: #1f2027;
-      --p-border: #25262e;
-      color-scheme: dark;
       position: relative; overflow: hidden; overflow: clip;
       background: var(--bg); color: var(--text); border-bottom: 1px solid var(--border);
     }
@@ -555,7 +536,7 @@
     .pipe { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin: 0; padding: 0; list-style: none; }
     @media (max-width: 1040px) { .pipe { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 620px) { .pipe { grid-template-columns: minmax(0, 1fr); } }
-    .stage { position: relative; padding: 16px 16px 22px; border-radius: 18px; background: var(--card); border: 1px solid var(--border); }
+    .stage { position: relative; padding: 16px 16px 22px; border-radius: 18px; background: var(--card); border: 1px solid var(--border); box-shadow: var(--shadow); }
     @media (min-width: 1041px) {
       .stage:not(:last-child)::after {
         content: ""; position: absolute; top: 82px; right: -15px; z-index: 1; width: 9px; height: 9px;
@@ -628,7 +609,7 @@
     .board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: 0; padding: 0; list-style: none; }
     @media (max-width: 1040px) { .board { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 620px) { .board { grid-template-columns: minmax(0, 1fr); } }
-    .scene { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 16px; background: var(--p-card); border: 1px solid var(--p-border); }
+    .scene { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 16px; background: var(--p-card); border: 1px solid var(--p-border); box-shadow: var(--shadow); }
     .scene-frames { display: grid; grid-template-columns: minmax(0, 140px) auto minmax(0, 140px); align-items: center; gap: 8px; }
     .scene-frames .tile { aspect-ratio: 3 / 4; border-radius: 10px; }
     @media (max-width: 620px) { .scene-frames { grid-template-columns: minmax(0, 104px) auto minmax(0, 104px); } }
