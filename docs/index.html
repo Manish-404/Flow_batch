@@ -262,7 +262,8 @@
     .icon-link:hover { color: var(--text); background: var(--hover); }
     @media (max-width: 860px) { .nav { display: none; } }
     @media (max-width: 480px) { .icon-link span { display: none; } }
-    @media (max-width: 400px) { .icon-link { display: none; } }
+    /* On small phones the star stays; the header's "Get FlowBatch" goes, as the hero's Download is right below */
+    @media (max-width: 400px) { .head-actions .btn { display: none; } }
     /* Theme toggle: a moon in the light theme, a sun in the dark one (CSS only, so it's right before JS runs) */
     .theme-toggle {
       display: grid; place-items: center; width: 38px; height: 38px; flex: none; padding: 0; border: 0; border-radius: 10px;
@@ -765,6 +766,7 @@
     .aside-card { padding: 22px 24px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--border); }
     .aside-card h3 { margin: 0 0 6px; font-size: 1.02rem; }
     .aside-card p { margin: 0; color: var(--muted); font-size: 15px; }
+    .star-card .btn { margin-top: 14px; }
     .cmd {
       margin: 12px 0 0; padding: 12px 14px; overflow-x: auto; border-radius: 10px;
       background: var(--code-bg); border: 1px solid var(--border); font: 13px/1.6 var(--mono);
@@ -897,7 +899,7 @@
       </nav>
       <div class="head-actions">
         <button class="theme-toggle" type="button" id="themeToggle" aria-label="Switch between light and dark theme"><svg class="i moon" aria-hidden="true"><use href="#i-moon"/></svg><svg class="i sun" aria-hidden="true"><use href="#i-sun"/></svg></button>
-        <a class="icon-link" href="https://github.com/Manish-404/Flow_batch" aria-label="Star FlowBatch on GitHub"><svg class="i i-fill" aria-hidden="true"><use href="#i-gh"/></svg><span>Star</span></a>
+        <a class="icon-link" href="https://github.com/Manish-404/Flow_batch" aria-label="Star FlowBatch on GitHub"><svg class="i i-fill star" aria-hidden="true"><use href="#i-star"/></svg><span>Star</span></a>
         <a class="btn btn-primary btn-sm" href="#install">Get FlowBatch</a>
       </div>
     </div>
@@ -1459,6 +1461,11 @@ Convert <span class="mention">@f_003</span> in the same style. Golden hour.</pre
               <h3>Prefer git?</h3>
               <p>Clone the repository, load that folder instead, and update it with <code>git pull</code>.</p>
               <pre class="cmd">git clone https://github.com/Manish-404/Flow_batch.git</pre>
+            </div>
+            <div class="aside-card star-card">
+              <h3>Enjoying FlowBatch?</h3>
+              <p>Give it a star on GitHub. It takes a second and helps other creators find it.</p>
+              <a class="btn btn-ghost btn-sm" href="https://github.com/Manish-404/Flow_batch"><svg class="i i-fill star" aria-hidden="true"><use href="#i-star"/></svg>Star on GitHub</a>
             </div>
           </div>
         </div>
