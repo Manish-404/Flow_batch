@@ -3,6 +3,7 @@
 import { MODELS, GEMINI_MODELS } from './store.js';
 import { SITES, findSiteTab, callAgent, stageFiles, pinTab, unpinTab, waitTabComplete } from './site.js';
 import { downloadMedia, fetchMediaBlob } from './downloads.js';
+import { cleanGeminiImage } from './mark-clean.js';
 import { recordFlowInfo, spendOne } from './credits.js';
 import { sleep, log, pad, slug, sanitizeSegment, promptForFlow, blobToDataUrl, isVideoAsset, assetFileName, geminiChatId } from './utils.js';
 
@@ -589,6 +590,7 @@ export class Runner {
           pathNoExt,
           readViaPage: (url) => callAgent(tabId, 'fetchAsDataUrl', { url }, { timeoutMs: 90000 }),
           viaPage: res.site === 'gemini',
+          transform: this.markRemover(res, `#${pad(item.n, 2)}`),
         });
         res.filename = d.filename;
         res.download = 'in_progress';
@@ -620,7 +622,19 @@ export class Runner {
     };
     const blob = await fetchMediaBlob([res.url, ...(res.altUrls || [])], { readViaPage, viaPage: true });
     if (!blob) throw new Error(`Could not read a result — keep the ${SITES[site].name} tab that produced it open`);
-    return blob;
+    const clean = this.markRemover(res);
+    return clean ? clean(blob) : blob;
+  }
+
+  /** For a Gemini image (with the setting on): a blob → blob step that removes the visible sparkle. */
+  markRemover(res, tag) {
+    if (res.site !== 'gemini' || res.kind !== 'image' || !this.settings.geminiRemoveMark) return undefined;
+    return async (blob) => {
+      const r = await cleanGeminiImage(blob);
+      res.mark = r.found ? 'removed' : 'none';
+      if (tag) log(r.found ? `${tag} Gemini sparkle removed (${r.method})` : `${tag} no visible Gemini sparkle found — saved as is`);
+      return r.blob;
+    };
   }
 
   /** "Download again" — also works while another queue runs, without touching its tab. */

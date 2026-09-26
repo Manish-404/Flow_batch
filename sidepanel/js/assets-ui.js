@@ -5,6 +5,7 @@ import { putAsset, deleteAsset, clearAssets } from './store.js';
 import { openZipPicker } from './zip-ui.js';
 import { SITES, findSiteTab } from './site.js';
 import { FLOW_VIDEO_TYPES, FLOW_MAX_BYTES } from './split.js';
+import { cleanGeminiImage } from './mark-clean.js';
 import { $, el, sanitizeName, sanitizeSegment, naturalCompare, isVideoAsset, assetFileName, geminiChatId, fmtBytes, log, toast } from './utils.js';
 
 const site = () => (app.session.site === 'gemini' ? 'gemini' : 'flow');
@@ -190,6 +191,40 @@ export async function removeAssets(ids) {
   emit('assetsChanged');
 }
 
+/** Remove the visible Gemini sparkle from image assets (ones downloaded from Gemini by hand). */
+async function cleanAssets() {
+  const images = app.assets.filter((a) => !isVideoAsset(a));
+  if (!images.length) return toast('No image assets');
+  if (!confirm(`Look for the visible Gemini sparkle in ${plural(images.length, 'image')} and remove it where found?
+
+Images without it are left as they are. Google's invisible SynthID watermark is not affected.`)) return;
+  const btn = $('btnCleanAssets');
+  btn.disabled = true;
+  let cleaned = 0;
+  try {
+    for (const [i, a] of images.entries()) {
+      btn.textContent = `✦ ${i + 1}/${images.length}`;
+      const r = await cleanGeminiImage(a.blob);
+      if (!r.found) continue;
+      URL.revokeObjectURL(a.thumbUrl);
+      a.blob = r.blob;
+      a.type = r.blob.type;
+      a.thumbUrl = URL.createObjectURL(r.blob);
+      delete a.onSite; // the site has the marked copy, not this one
+      await saveRecord(a);
+      cleaned++;
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✦ Clean';
+  }
+  renderAssets();
+  emit('assetsChanged');
+  log(`Gemini sparkle removed from ${cleaned} of ${images.length} image asset(s)`, cleaned ? 'ok' : 'info');
+  toast(cleaned ? `Removed the Gemini sparkle from ${plural(cleaned, 'image')}` : 'No visible Gemini sparkle found');
+  return undefined;
+}
+
 export async function removeAllAssets() {
   await clearAssets();
   app.assets.forEach((a) => URL.revokeObjectURL(a.thumbUrl));
@@ -285,6 +320,7 @@ export function initAssets() {
     })
   );
   $('btnMarkAssets').addEventListener('click', markAll);
+  $('btnCleanAssets').addEventListener('click', cleanAssets);
   on('siteChanged', renderAssets);
   renderAssets();
 }

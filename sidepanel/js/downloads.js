@@ -86,10 +86,11 @@ export async function fetchMediaBlob(urls, { readViaPage, viaPage = false } = {}
  * first, then the one shown on the page); the first that can be read wins, so the real
  * MIME type picks the extension. If none can, Chrome downloads the first http(s) URL itself.
  */
-export async function downloadMedia({ url, altUrls = [], kind, pathNoExt, readViaPage, viaPage = false }) {
+export async function downloadMedia({ url, altUrls = [], kind, pathNoExt, readViaPage, viaPage = false, transform }) {
   const fallbackExt = kind === 'video' ? 'mp4' : 'png';
   const urls = [url, ...altUrls];
-  const blob = await fetchMediaBlob(urls, { readViaPage, viaPage });
+  let blob = await fetchMediaBlob(urls, { readViaPage, viaPage });
+  if (blob && transform) blob = await transform(blob); // e.g. remove Gemini's sparkle
   if (blob) return downloadBlob(blob, pathNoExt, fallbackExt);
   const direct = urls.find((u) => /^https?:/i.test(u || ''));
   if (!direct) throw new Error('could not read the file from the page');

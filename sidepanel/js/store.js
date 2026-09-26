@@ -20,6 +20,8 @@ export const DEFAULT_SETTINGS = {
   selectors: { promptBox: '', submitButton: '', addImageButton: '', settingsButton: '', startFrameSlot: '', endFrameSlot: '' },
   geminiUrl: 'https://gemini.google.com/app',
   geminiNewChat: true,
+  geminiRemoveMark: true, // strip the visible Gemini sparkle from downloaded images
+  geminiMark: {}, // the sparkle's pattern, learned from your images (see watermark.js)
   geminiSelectors: { promptBox: '', submitButton: '', addImageButton: '', toolsButton: '', modelButton: '', newChatButton: '' },
 };
 
@@ -128,6 +130,7 @@ export async function loadSettings() {
   merged.selectors = { ...DEFAULT_SETTINGS.selectors, ...(settings?.selectors || {}) };
   merged.geminiSelectors = { ...DEFAULT_SETTINGS.geminiSelectors, ...(settings?.geminiSelectors || {}) };
   merged.learnedCredits = { ...(settings?.learnedCredits || {}) };
+  merged.geminiMark = { ...(settings?.geminiMark || {}) };
   return merged;
 }
 export const saveSettings = (settings) => chrome.storage.local.set({ settings });

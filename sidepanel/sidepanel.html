@@ -52,6 +52,7 @@
         <div class="row" id="assetActions" hidden>
           <button id="btnZipAssets" class="btn btn-ghost btn-sm grow" title="Download the assets as one ZIP">⤓ ZIP…</button>
           <button id="btnMarkAssets" class="btn btn-ghost btn-sm grow">☁ All in Flow</button>
+          <button id="btnCleanAssets" class="btn btn-ghost btn-sm grow" title="Remove the visible Gemini sparkle from image assets you downloaded from Gemini yourself">✦ Clean</button>
           <button id="btnClearAssets" class="btn btn-ghost btn-sm grow">Clear assets</button>
         </div>
       </section>
@@ -374,6 +375,7 @@
           <label class="toggle"><input type="checkbox" data-setting="clearReferences" /><span></span>Remove previous reference images before each prompt</label>
           <label class="toggle"><input type="checkbox" data-setting="autoNewProject" /><span></span>Create a Flow project automatically if none is open</label>
           <label class="toggle"><input type="checkbox" data-setting="geminiNewChat" /><span></span>Start a new Gemini chat for each prompt</label>
+          <label class="toggle"><input type="checkbox" data-setting="geminiRemoveMark" /><span></span>Remove the visible Gemini sparkle from downloaded images</label>
           <label class="toggle"><input type="checkbox" data-setting="stopOnFailure" /><span></span>Stop the queue after 3 failures in a row</label>
         </div>
         <label class="field"><span class="label">@mention text sent to Flow / Gemini</span>
