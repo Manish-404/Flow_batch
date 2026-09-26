@@ -401,14 +401,23 @@
       color: var(--text); font-size: 14px; font-weight: 500; text-decoration: none;
     }
     .social b { color: var(--accent-text); font-weight: 700; }
-    .reels { margin-top: 72px; }
-    .embed-note { max-width: 46em; margin: 0 auto 18px; text-align: center; color: var(--muted); font-size: 14px; }
-    .reel-load-wrap { text-align: center; margin: 0 0 28px; }
-    .reel-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; max-width: 64em; margin: 0 auto; }
-    @media (max-width: 860px) { .reel-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-    @media (max-width: 520px) { .reel-grid { grid-template-columns: minmax(0, 1fr); max-width: 320px; } }
-    .reel-grid.loaded { grid-template-columns: minmax(0, 1fr); max-width: 40em; gap: 24px; }
-    .reel-card { position: relative; border-radius: 20px; overflow: hidden; background: var(--card); border: 1px solid var(--border); min-width: 0; }
+    .reels { margin-top: 88px; }
+    .reel-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 22px; }
+    .reel-head h3 { margin: 0; font-size: clamp(1.45rem, 2.6vw, 2rem); line-height: 1.15; letter-spacing: -0.025em; }
+    .reel-sub { margin: 8px 0 0; max-width: 42em; color: var(--muted); font-size: 1.05rem; }
+    .reel-nav { display: flex; align-items: center; gap: 8px; flex: none; }
+    @media (max-width: 700px) { .reel-nav .round { display: none; } }
+    @media (max-width: 560px) { .reel-head { flex-direction: column; align-items: flex-start; } }
+    .embed-note { margin: 0 0 18px; color: var(--muted); font-size: 14px; }
+    .reel-grid {
+      --edge: max(var(--gutter), calc((100% - var(--maxw)) / 2));
+      display: flex; gap: 18px; overflow-x: auto; overscroll-behavior-x: contain;
+      padding: 6px var(--edge) 10px; scroll-padding-inline: var(--edge); scroll-snap-type: x mandatory;
+      scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent;
+    }
+    .reel-card { flex: 0 0 auto; width: 210px; scroll-snap-align: start; position: relative; border-radius: 20px; overflow: hidden; background: var(--card); border: 1px solid var(--border); }
+    @media (max-width: 480px) { .reel-card { width: 66vw; } }
+    .reel-grid.loaded .reel-card { width: auto; overflow: visible; background: none; border: none; border-radius: 0; }
     .reel-thumb { position: relative; display: block; aspect-ratio: 4 / 5; overflow: hidden; color: #fff; text-decoration: none; }
     .reel-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.35s ease; }
     .reel-card:hover .reel-thumb img { transform: scale(1.06); }
@@ -421,7 +430,6 @@
     .reel-play .i { width: 20px; height: 20px; margin-left: 2px; }
     .reel-card:hover .reel-play { transform: translate(-50%, -50%) scale(1.08); }
     .reel-handle { position: absolute; left: 14px; bottom: 12px; right: 14px; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .reel-embed { max-width: 100%; overflow-x: auto; }
     .chapters time { color: var(--accent-text); font-weight: 700; font-variant-numeric: tabular-nums; }
 
     /* ---------- how it works ---------- */
@@ -920,57 +928,61 @@
           </ul>
           <p class="video-cap" id="walk-cap">Sped up. The side panel is the real extension and the anime clips are real Flow results; the Flow tab is rebuilt from a screenshot of the same session. It ends with the finished Reel as posted on Instagram. Captions are available.</p>
         </div>
+      </div>
 
-        <div class="reels" id="more-reels">
-          <div class="walk-head">
+      <div class="reels" id="more-reels">
+        <div class="wrap reel-head">
+          <div>
             <h3>More from @bidibambudum</h3>
-            <p>Tap a reel to watch it on Instagram, or load them here for Instagram's own preview card &mdash; real song name, real likes.</p>
+            <p class="reel-sub">Tap a reel to watch it on Instagram, or load them here for Instagram's own preview card &mdash; real song name, real likes.</p>
           </div>
-          <p class="embed-note">Loading only fetches a thumbnail from this site until you press the button below. Instagram then sets its own cookies for that reel and may show you ads.</p>
-          <div class="reel-load-wrap">
+          <div class="reel-nav">
             <button type="button" class="btn btn-ghost btn-sm" id="btnLoadReels" aria-controls="reelGrid" aria-expanded="false">Load Instagram reels</button>
+            <button class="round" type="button" data-reel-scroll="-1" aria-controls="reelGrid" aria-label="Scroll reels left"><svg class="i" aria-hidden="true"><use href="#i-left"/></svg></button>
+            <button class="round" type="button" data-reel-scroll="1" aria-controls="reelGrid" aria-label="Scroll reels right"><svg class="i" aria-hidden="true"><use href="#i-right"/></svg></button>
           </div>
-          <div class="reel-grid" id="reelGrid">
-            <div class="reel-card" data-reel-url="https://www.instagram.com/reel/DduLARnT2F5/">
-              <a class="reel-thumb" href="https://www.instagram.com/reel/DduLARnT2F5/">
-                <img src="media/reels/DduLARnT2F5.jpg" alt="" loading="lazy" width="640" height="800">
-                <span class="reel-scrim" aria-hidden="true"></span>
-                <span class="reel-play" aria-hidden="true"><svg class="i i-fill"><use href="#i-play"/></svg></span>
-                <span class="reel-handle">@bidibambudum</span>
-              </a>
-            </div>
-            <div class="reel-card" data-reel-url="https://www.instagram.com/reel/DdpLLKnT1dE/">
-              <a class="reel-thumb" href="https://www.instagram.com/reel/DdpLLKnT1dE/">
-                <img src="media/reels/DdpLLKnT1dE.jpg" alt="" loading="lazy" width="640" height="800">
-                <span class="reel-scrim" aria-hidden="true"></span>
-                <span class="reel-play" aria-hidden="true"><svg class="i i-fill"><use href="#i-play"/></svg></span>
-                <span class="reel-handle">@bidibambudum</span>
-              </a>
-            </div>
-            <div class="reel-card" data-reel-url="https://www.instagram.com/reel/DdmaHlczedl/">
-              <a class="reel-thumb" href="https://www.instagram.com/reel/DdmaHlczedl/">
-                <img src="media/reels/DdmaHlczedl.jpg" alt="" loading="lazy" width="640" height="800">
-                <span class="reel-scrim" aria-hidden="true"></span>
-                <span class="reel-play" aria-hidden="true"><svg class="i i-fill"><use href="#i-play"/></svg></span>
-                <span class="reel-handle">@bidibambudum</span>
-              </a>
-            </div>
-            <div class="reel-card" data-reel-url="https://www.instagram.com/reel/Ddes4M4TsWW/">
-              <a class="reel-thumb" href="https://www.instagram.com/reel/Ddes4M4TsWW/">
-                <img src="media/reels/Ddes4M4TsWW.jpg" alt="" loading="lazy" width="640" height="800">
-                <span class="reel-scrim" aria-hidden="true"></span>
-                <span class="reel-play" aria-hidden="true"><svg class="i i-fill"><use href="#i-play"/></svg></span>
-                <span class="reel-handle">@bidibambudum</span>
-              </a>
-            </div>
-            <div class="reel-card" data-reel-url="https://www.instagram.com/reel/DY5I-c2znAo/">
-              <a class="reel-thumb" href="https://www.instagram.com/reel/DY5I-c2znAo/">
-                <img src="media/reels/DY5I-c2znAo.jpg" alt="" loading="lazy" width="640" height="800">
-                <span class="reel-scrim" aria-hidden="true"></span>
-                <span class="reel-play" aria-hidden="true"><svg class="i i-fill"><use href="#i-play"/></svg></span>
-                <span class="reel-handle">@bidibambudum</span>
-              </a>
-            </div>
+        </div>
+        <p class="wrap embed-note">Loading only fetches a thumbnail from this site until you press a card or the Load button. Instagram then sets its own cookies for that reel and may show you ads.</p>
+        <div class="reel-grid" id="reelGrid" tabindex="0" role="region" aria-label="Reels from @bidibambudum">
+          <div class="reel-card" data-reel-url="https://www.instagram.com/reel/DduLARnT2F5/">
+            <a class="reel-thumb" href="https://www.instagram.com/reel/DduLARnT2F5/">
+              <img src="media/reels/DduLARnT2F5.jpg" alt="" loading="lazy" width="640" height="800">
+              <span class="reel-scrim" aria-hidden="true"></span>
+              <span class="reel-play" aria-hidden="true"><svg class="i i-fill"><use href="#i-play"/></svg></span>
+              <span class="reel-handle">@bidibambudum</span>
+            </a>
+          </div>
+          <div class="reel-card" data-reel-url="https://www.instagram.com/reel/DdpLLKnT1dE/">
+            <a class="reel-thumb" href="https://www.instagram.com/reel/DdpLLKnT1dE/">
+              <img src="media/reels/DdpLLKnT1dE.jpg" alt="" loading="lazy" width="640" height="800">
+              <span class="reel-scrim" aria-hidden="true"></span>
+              <span class="reel-play" aria-hidden="true"><svg class="i i-fill"><use href="#i-play"/></svg></span>
+              <span class="reel-handle">@bidibambudum</span>
+            </a>
+          </div>
+          <div class="reel-card" data-reel-url="https://www.instagram.com/reel/DdmaHlczedl/">
+            <a class="reel-thumb" href="https://www.instagram.com/reel/DdmaHlczedl/">
+              <img src="media/reels/DdmaHlczedl.jpg" alt="" loading="lazy" width="640" height="800">
+              <span class="reel-scrim" aria-hidden="true"></span>
+              <span class="reel-play" aria-hidden="true"><svg class="i i-fill"><use href="#i-play"/></svg></span>
+              <span class="reel-handle">@bidibambudum</span>
+            </a>
+          </div>
+          <div class="reel-card" data-reel-url="https://www.instagram.com/reel/Ddes4M4TsWW/">
+            <a class="reel-thumb" href="https://www.instagram.com/reel/Ddes4M4TsWW/">
+              <img src="media/reels/Ddes4M4TsWW.jpg" alt="" loading="lazy" width="640" height="800">
+              <span class="reel-scrim" aria-hidden="true"></span>
+              <span class="reel-play" aria-hidden="true"><svg class="i i-fill"><use href="#i-play"/></svg></span>
+              <span class="reel-handle">@bidibambudum</span>
+            </a>
+          </div>
+          <div class="reel-card" data-reel-url="https://www.instagram.com/reel/DY5I-c2znAo/">
+            <a class="reel-thumb" href="https://www.instagram.com/reel/DY5I-c2znAo/">
+              <img src="media/reels/DY5I-c2znAo.jpg" alt="" loading="lazy" width="640" height="800">
+              <span class="reel-scrim" aria-hidden="true"></span>
+              <span class="reel-play" aria-hidden="true"><svg class="i i-fill"><use href="#i-play"/></svg></span>
+              <span class="reel-handle">@bidibambudum</span>
+            </a>
           </div>
         </div>
       </div>
@@ -1641,9 +1653,25 @@ Convert <span class="mention">@f_003</span> in the same style. Golden hour.</pre
         }));
       }
 
+      /* Arrow buttons for the reel row, same pattern as the screenshot strip above */
+      const reelGrid = document.getElementById('reelGrid');
+      const reelArrows = [...document.querySelectorAll('[data-reel-scroll]')];
+      if (reelGrid && reelArrows.length) {
+        const update = () => {
+          const max = reelGrid.scrollWidth - reelGrid.clientWidth - 1;
+          reelArrows[0].disabled = reelGrid.scrollLeft <= 0;
+          reelArrows[1].disabled = reelGrid.scrollLeft >= max;
+        };
+        reelArrows.forEach((button) => button.addEventListener('click', () => {
+          reelGrid.scrollBy({ left: Number(button.dataset.reelScroll) * reelGrid.clientWidth * 0.8, behavior: reduce ? 'auto' : 'smooth' });
+        }));
+        reelGrid.addEventListener('scroll', update, { passive: true });
+        window.addEventListener('resize', update);
+        update();
+      }
+
       /* More reels: click-to-load, official embed.js. Nothing is requested from Instagram before this click. */
       const btnReels = document.getElementById('btnLoadReels');
-      const reelGrid = document.getElementById('reelGrid');
       if (btnReels && reelGrid) {
         btnReels.addEventListener('click', () => {
           [...reelGrid.querySelectorAll('.reel-card[data-reel-url]')].forEach((card) => {
@@ -1665,6 +1693,8 @@ Convert <span class="mention">@f_003</span> in the same style. Golden hour.</pre
           btnReels.hidden = true;
           reelGrid.setAttribute('tabindex', '-1');
           reelGrid.focus({ preventScroll: true });
+          // the row's scrollable width changes as embeds size themselves; refresh the arrows a few times
+          [300, 1200, 2500].forEach((ms) => setTimeout(() => window.dispatchEvent(new Event('resize')), ms));
         });
       }
     })();
