@@ -393,7 +393,14 @@
       border: 1px solid var(--border); border-radius: 999px; background: var(--card);
       color: var(--text); font-size: 14px; font-weight: 500; text-decoration: none;
     }
-    .chapters a:hover { border-color: var(--accent-line); }
+    .chapters a:hover, .social a:hover { border-color: var(--accent-line); }
+    .social { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 60em; margin: 12px auto 0; padding: 0; list-style: none; }
+    .social a {
+      display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 14px;
+      border: 1px solid var(--border); border-radius: 999px; background: var(--card);
+      color: var(--text); font-size: 14px; font-weight: 500; text-decoration: none;
+    }
+    .social b { color: var(--accent-text); font-weight: 700; }
     .chapters time { color: var(--accent-text); font-weight: 700; font-variant-numeric: tabular-nums; }
 
     /* ---------- how it works ---------- */
@@ -684,7 +691,7 @@
             <a class="btn btn-primary" href="https://github.com/Manish-404/Flow_batch/archive/refs/heads/main.zip"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Download FlowBatch</a>
             <a class="btn btn-ghost" href="https://github.com/Manish-404/Flow_batch"><svg class="i i-fill" aria-hidden="true"><use href="#i-gh"/></svg>View on GitHub</a>
           </div>
-          <p class="fine">Free · Chrome 116 or newer · No account needed · <a href="#install">Install steps</a> · <a href="#walkthrough">1:26 walkthrough</a></p>
+          <p class="fine">Free · Chrome 116 or newer · No account needed · <a href="#install">Install steps</a> · <a href="#walkthrough">1:37 walkthrough</a></p>
         </div>
 
         <div class="mock-stack">
@@ -742,7 +749,7 @@
         <div class="walk" id="walkthrough">
           <div class="walk-head">
             <h3>Full walkthrough: from one video to anime clips</h3>
-            <p>1:26 · Split a video, send the clips to Flow, write one prompt, press Start, and get the results.</p>
+            <p>1:37 · Split a video, send the clips to Flow, write one prompt, press Start, get the results, and see them posted as a Reel.</p>
           </div>
           <div class="video-card">
             <video id="walk-video" controls preload="none" playsinline poster="media/flowbatch-walkthrough.jpg" width="1920" height="1080" aria-describedby="walk-cap">
@@ -758,8 +765,15 @@
             <li><a href="media/flowbatch-walkthrough.mp4#t=33" data-t="33"><time>0:33</time>One prompt</a></li>
             <li><a href="media/flowbatch-walkthrough.mp4#t=45" data-t="45"><time>0:45</time>Press Start</a></li>
             <li><a href="media/flowbatch-walkthrough.mp4#t=66" data-t="66"><time>1:06</time>The results</a></li>
+            <li><a href="media/flowbatch-walkthrough.mp4#t=80" data-t="80"><time>1:20</time>Posted as a Reel</a></li>
           </ol>
-          <p class="video-cap" id="walk-cap">Sped up. The side panel is the real extension and the anime clips are real Flow results; the Flow tab is rebuilt from a screenshot of the same session. Captions are available.</p>
+          <ul class="social" aria-label="The finished Reel and more from @bidibambudum">
+            <li><a href="https://www.instagram.com/bidibambudum/"><b>Instagram</b>@bidibambudum</a></li>
+            <li><a href="https://www.instagram.com/bidibambudum/reels/"><b>More reels</b>on Instagram</a></li>
+            <li><a href="https://www.threads.com/@bidibambudum"><b>Threads</b>@bidibambudum</a></li>
+            <li><a href="https://www.instagram.com/reel/DduLARnT2F5/"><b>This reel</b>the finished Reel</a></li>
+          </ul>
+          <p class="video-cap" id="walk-cap">Sped up. The side panel is the real extension and the anime clips are real Flow results; the Flow tab is rebuilt from a screenshot of the same session. It ends with the finished Reel as posted on Instagram. Captions are available.</p>
         </div>
       </div>
     </section>

@@ -14,7 +14,7 @@ screenshots and install steps on one page.
 <p align="center">
   <a href="docs/media/flowbatch-promo.mp4"><img src="docs/media/flowbatch-promo.jpg" width="720" alt="FlowBatch promo video — click to play"></a>
   <br><sub>▶ <a href="docs/media/flowbatch-promo.mp4"><b>Watch the 21-second promo</b></a> — write 30 prompts, @mention your frames, press Start, walk away.</sub>
-  <br><sub>▶ <a href="docs/media/flowbatch-walkthrough.mp4"><b>Watch the 1:26 walkthrough</b></a> — split a video, send the clips to Flow, write one prompt, press Start, get the anime clips.</sub>
+  <br><sub>▶ <a href="docs/media/flowbatch-walkthrough.mp4"><b>Watch the 1:37 walkthrough</b></a> — split a video, send the clips to Flow, write one prompt, press Start, get the anime clips (<a href="https://www.instagram.com/reel/DduLARnT2F5/">posted as a Reel</a>; more on <a href="https://www.instagram.com/bidibambudum/">Instagram</a> and <a href="https://www.threads.com/@bidibambudum">Threads</a>, @bidibambudum).</sub>
 </p>
 
 ## Screenshots
