@@ -574,6 +574,27 @@
   // ---------- "Send to FlowBatch" in Gemini's share dialog ----------
   // Share on a reply opens "Shareable public link to video" (or image). FlowBatch adds a button
   // there that sends that reply's video or image to the side panel's Upload assets, for ✦ Clean.
+
+  // Glow-pulse highlight for the first 80 Gemini sessions so new users don't miss the button.
+  let _shareHighlightCount = null;
+  chrome.storage.local.get('fbShareHighlightCount').then(({ fbShareHighlightCount: n = 0 }) => {
+    _shareHighlightCount = n;
+    chrome.storage.local.set({ fbShareHighlightCount: n + 1 });
+  }).catch(() => { _shareHighlightCount = 0; });
+
+  let _shareStyleInjected = false;
+  function ensureShareStyle() {
+    if (_shareStyleInjected) return;
+    _shareStyleInjected = true;
+    const s = document.createElement('style');
+    s.textContent =
+      '@keyframes fb-share-pulse{0%,100%{box-shadow:0 0 0 2px rgba(91,76,240,.55),0 4px 18px rgba(91,76,240,.3)}' +
+      '50%{box-shadow:0 0 0 8px rgba(91,76,240,0),0 8px 32px rgba(91,76,240,.65)}}' +
+      'button[data-fb-hl]{animation:fb-share-pulse 1.7s ease-in-out infinite;' +
+      'outline:2px solid rgba(255,255,255,.38);outline-offset:2px}';
+    (document.head || document.documentElement).append(s);
+  }
+
   const SHARE_LABEL = /\bshare\b/i;
   const SHARE_DIALOG = /public link to (a |the |this )?(video|image)|shareable public link/i;
   let shareFrom = null; // the reply whose Share button was pressed last
@@ -620,41 +641,48 @@
     'background:#5b4cf0;color:#fff;font:600 14px/1 "Google Sans",Roboto,Arial,sans-serif;cursor:pointer;';
 
   function makeShareButton(dialog) {
-    const wrap = document.createElement('div');
-    wrap.id = '__flowbatch-share';
-    wrap.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:14px 24px 4px;';
-    const btn = document.createElement('button');
-    btn.type = 'button';
+    const highlight = (_shareHighlightCount ?? 0) < 80;
+    if (highlight) ensureShareStyle();
+    const wrap = document.createElement(‘div’);
+    wrap.id = ‘__flowbatch-share’;
+    wrap.style.cssText = ‘display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:14px 24px 4px;’;
+    const btn = document.createElement(‘button’);
+    btn.type = ‘button’;
     btn.style.cssText = shareButtonStyle;
-    btn.textContent = '✦ Send to FlowBatch';
-    btn.title = 'Add this video or image to FlowBatch → Upload assets, where ✦ Clean removes the visible sparkle';
-    const note = document.createElement('span');
-    note.setAttribute('aria-live', 'polite');
-    note.style.cssText = 'font:13px/1.4 "Google Sans",Roboto,Arial,sans-serif;opacity:.8;';
-    note.textContent = 'Opens it in FlowBatch’s Upload assets';
-    btn.addEventListener('click', async (e) => {
+    btn.textContent = ‘✦ Send to FlowBatch’;
+    btn.title = ‘Add this video or image to FlowBatch → Upload assets, where ✦ Clean removes the visible sparkle’;
+    if (highlight) btn.setAttribute(‘data-fb-hl’, ‘1’);
+    const note = document.createElement(‘span’);
+    note.setAttribute(‘aria-live’, ‘polite’);
+    note.style.cssText = ‘font:13px/1.4 "Google Sans",Roboto,Arial,sans-serif;opacity:.8;’;
+    note.textContent = highlight
+      ? ‘↑ New! Sends this video or image directly to FlowBatch for ✦ Clean’
+      : ‘Opens it in FlowBatch’s Upload assets’;
+    btn.addEventListener(‘click’, async (e) => {
       e.preventDefault();
       e.stopPropagation();
       const m = sharedMedia(dialog);
       if (!m) {
-        note.textContent = 'FlowBatch couldn’t find the video in this reply. Play it once, then try again.';
+        note.textContent = ‘FlowBatch couldn’t find the video in this reply. Play it once, then try again.’;
         return;
       }
       btn.disabled = true;
-      btn.textContent = 'Sending…';
+      btn.removeAttribute(‘data-fb-hl’); // stop pulsing while the request is in flight
+      btn.textContent = ‘Sending…’;
       try {
-        const item = { ...toResult(m), name: m.kind === 'video' ? 'gemini_video' : 'gemini_image' };
-        const r = await chrome.runtime.sendMessage({ channel: 'flowbatch-import', item });
-        if (!r?.ok) throw new Error(r?.error || 'FlowBatch did not answer');
-        btn.textContent = '✓ Sent to FlowBatch';
+        const item = { ...toResult(m), name: m.kind === ‘video’ ? ‘gemini_video’ : ‘gemini_image’ };
+        const r = await chrome.runtime.sendMessage({ channel: ‘flowbatch-import’, item });
+        if (!r?.ok) throw new Error(r?.error || ‘FlowBatch did not answer’);
+        btn.textContent = ‘✓ Sent to FlowBatch’;
         note.textContent = r.opened
-          ? 'It’s being added to Upload assets. Press ✦ Clean there.'
-          : 'Open FlowBatch from the toolbar: it’s waiting for Upload assets.';
+          ? ‘It’s being added to Upload assets. Press ✦ Clean there.’
+          : ‘Open FlowBatch from the toolbar: it’s waiting for Upload assets.’;
       } catch (err) {
         btn.disabled = false;
-        btn.textContent = '✦ Send to FlowBatch';
-        note.textContent = /context invalidated/i.test(err?.message || '')
-          ? 'FlowBatch was updated. Reload this tab, then try again.'
+        if (highlight) btn.setAttribute(‘data-fb-hl’, ‘1’); // restore glow on error so user retries
+        btn.textContent = ‘✦ Send to FlowBatch’;
+        note.textContent = /context invalidated/i.test(err?.message || ‘’)
+          ? ‘FlowBatch was updated. Reload this tab, then try again.’
           : `Couldn’t send: ${err?.message || err}`;
       }
     });
