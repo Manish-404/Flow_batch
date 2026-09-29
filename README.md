@@ -150,7 +150,8 @@ What is different from Flow:
   real pixels come back instead of a patch. Nothing outside that spot changes, and files without the mark are
   saved as they are. A video is first sampled at 24 points to learn the mark, then played through once and
   re-recorded as MP4 with its audio, so it takes about as long as the clip. **✦ Clean** in Upload assets does
-  the same for images and clips you downloaded yourself. Only the visible logo goes: Google's invisible
+  the same for images and clips you downloaded yourself. To check a file, press **⤢** on its tile: it opens
+  the whole image or clip, uncropped, and **🔍 Corner** zooms into the spot where the sparkle sits. Only the visible logo goes: Google's invisible
   **SynthID** watermark stays in the file, so it can still be identified as AI-generated.
 
 When Gemini is selected, Settings shows **Gemini elements** — prompt box, send button, upload (+),

@@ -234,6 +234,48 @@ export async function removeAllAssets() {
   emit('assetsChanged');
 }
 
+// ---------- viewer: one asset, whole and uncropped, with a zoom on the sparkle's corner ----------
+let viewerReturnFocus = null;
+
+function openViewer(a) {
+  const frame = $('viewFrame');
+  const video = isVideoAsset(a);
+  const media = video
+    ? el('video', { src: a.thumbUrl, controls: true, loop: true, autoplay: true, playsinline: true })
+    : el('img', { src: a.thumbUrl, alt: a.name });
+  if (video) media.muted = true;
+  const info = () => {
+    const w = video ? media.videoWidth : media.naturalWidth;
+    const h = video ? media.videoHeight : media.naturalHeight;
+    $('viewInfo').textContent = [`@${a.name}`, w ? `${w}×${h}` : null, a.blob?.size ? fmtBytes(a.blob.size) : null].filter(Boolean).join(' · ');
+  };
+  media.addEventListener(video ? 'loadedmetadata' : 'load', info);
+  frame.replaceChildren(media);
+  info();
+  setCorner(false);
+  $('viewTitle').textContent = video ? 'Clip preview' : 'Image preview';
+  viewerReturnFocus = document.activeElement;
+  $('viewModal').hidden = false;
+  $('viewClose').focus();
+}
+
+function setCorner(on) {
+  $('viewFrame').classList.toggle('corner', on);
+  $('viewCorner').setAttribute('aria-pressed', String(on));
+  $('viewCorner').textContent = on ? '🔍 Whole file' : '🔍 Corner';
+  // Scaled video controls would be cut off; the clip keeps playing without them.
+  const v = $('viewFrame').querySelector('video');
+  if (v) v.controls = !on;
+}
+
+function closeViewer() {
+  if ($('viewModal').hidden) return;
+  $('viewFrame').querySelector('video')?.pause();
+  $('viewFrame').replaceChildren();
+  $('viewModal').hidden = true;
+  viewerReturnFocus?.focus?.();
+}
+
 export function renderAssets() {
   const grid = $('assetGrid');
   const s = site();
@@ -251,6 +293,14 @@ export function renderAssets() {
           'div',
           { class: 'thumb' },
           assetThumb(a),
+          el('button', {
+            class: 'view',
+            type: 'button',
+            text: '⤢',
+            title: 'View large and uncropped — check the corner for a sparkle',
+            'aria-label': `View ${a.name} large`,
+            onclick: () => openViewer(a),
+          }),
           isVideoAsset(a) ? el('span', { class: 'vid', text: '🎞' }) : null,
           el('button', {
             class: `onsite${marked ? ' on' : ''}`,
@@ -322,6 +372,10 @@ export function initAssets() {
   );
   $('btnMarkAssets').addEventListener('click', markAll);
   $('btnCleanAssets').addEventListener('click', cleanAssets);
+  $('viewClose').addEventListener('click', closeViewer);
+  $('viewCorner').addEventListener('click', () => setCorner(!$('viewFrame').classList.contains('corner')));
+  $('viewModal').addEventListener('click', (e) => e.target === $('viewModal') && closeViewer());
+  document.addEventListener('keydown', (e) => e.key === 'Escape' && closeViewer());
   on('siteChanged', renderAssets);
   renderAssets();
 }

@@ -207,6 +207,16 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .asset .onsite { position: absolute; left: 4px; bottom: 4px; max-width: calc(100% - 8px); border: 0; border-radius: 999px; padding: 1px 7px; font-size: 10px; font-weight: 600; line-height: 1.5; background: rgba(10, 10, 14, 0.62); color: #fff; opacity: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: opacity 0.12s; }
 .asset:hover .onsite, .asset .onsite:focus-visible { opacity: 1; }
 .asset .onsite.on { background: #16a34a; opacity: 1; }
+.asset .view { position: absolute; top: 4px; left: 4px; width: 20px; height: 20px; border-radius: 6px; border: 0; padding: 0; background: rgba(10, 10, 14, 0.65); color: #fff; font-size: 12px; line-height: 1; opacity: 0.8; cursor: zoom-in; }
+.asset:hover .view, .asset .view:focus-visible { opacity: 1; }
+.asset .view:hover { background: var(--accent); }
+.asset .view ~ .vid { left: 28px; }
+/* Asset viewer: the whole file, uncropped, at its own shape */
+.view-stage { display: grid; place-items: center; background: #000; border-radius: 10px; min-height: 120px; }
+.view-frame { position: relative; overflow: hidden; line-height: 0; max-width: 100%; }
+.view-frame img, .view-frame video { display: block; max-width: 100%; max-height: 70vh; width: auto; height: auto; transition: transform 0.2s ease; transform-origin: 100% 100%; }
+.view-frame.corner img, .view-frame.corner video { transform: scale(3); }
+#viewCorner[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-2); }
 
 /* ---------- segmented controls ---------- */
 .seg { display: flex; background: var(--field); border-radius: 10px; padding: 3px; gap: 2px; }

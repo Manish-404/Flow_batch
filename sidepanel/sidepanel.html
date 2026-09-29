@@ -429,6 +429,21 @@
       </div>
     </div>
 
+    <!-- ============================ ASSET VIEWER ============================ -->
+    <div id="viewModal" class="modal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="viewTitle">
+        <div class="card-head">
+          <h2 id="viewTitle">Preview</h2>
+          <button id="viewClose" class="icon-x" title="Close" aria-label="Close">✕</button>
+        </div>
+        <div class="view-stage"><div id="viewFrame" class="view-frame"></div></div>
+        <div class="row between">
+          <span id="viewInfo" class="muted small"></span>
+          <button id="viewCorner" class="btn btn-ghost btn-sm" aria-pressed="false" title="Zoom into the bottom-right corner, where Gemini puts its sparkle">🔍 Corner</button>
+        </div>
+      </div>
+    </div>
+
     <div id="toast" class="toast" hidden></div>
     <script type="module" src="js/main.js"></script>
   </body>
