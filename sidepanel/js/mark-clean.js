@@ -2,6 +2,7 @@
 import { app, persistSettings } from './app.js';
 import { removeGeminiMark } from './watermark.js';
 import { removeMarkFromVideo } from './video-mark.js';
+import { track } from './telemetry.js';
 
 const learnedStore = () => (app.settings ? (app.settings.geminiMark ||= {}) : {});
 
@@ -12,6 +13,7 @@ export async function cleanGeminiImage(blob) {
   try {
     const r = await removeGeminiMark(blob, learned);
     if (r.found && app.settings) persistSettings(); // keep what was learned
+    if (r.found) track('sparkle', 'image');
     return r;
   } catch {
     return { blob, found: false }; // an undecodable image is saved as it came
@@ -24,6 +26,7 @@ export async function cleanGeminiVideo(blob, opts) {
   try {
     const r = await removeMarkFromVideo(blob, learnedStore(), opts);
     if (r.found && app.settings) persistSettings();
+    if (r.found) track('sparkle', 'video');
     return r;
   } catch (e) {
     if (/cancel/i.test(e.message)) throw e;

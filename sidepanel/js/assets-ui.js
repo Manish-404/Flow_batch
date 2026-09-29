@@ -1,6 +1,7 @@
 // "Upload assets" card: add / rename / remove reference images and video clips (persisted in
 // IndexedDB), and mark the ones already uploaded to Flow or Gemini so a run doesn't upload them again.
 import { app, on, emit, persistSession } from './app.js';
+import { track } from './telemetry.js';
 import { putAsset, deleteAsset, clearAssets } from './store.js';
 import { openZipPicker } from './zip-ui.js';
 import { SITES, findSiteTab, callAgent } from './site.js';
@@ -356,6 +357,7 @@ async function importFromSite(item) {
   tile?.classList.add('just-added');
   setTimeout(() => tile?.classList.remove('just-added'), 2400);
   log(`Added @${a.name} from Gemini (${fmtBytes(blob.size)}) — press ✦ Clean to remove the sparkle`, 'ok');
+  track('gemini-share');
   toast(`Added @${a.name} — press ✦ Clean to remove the sparkle`);
 }
 

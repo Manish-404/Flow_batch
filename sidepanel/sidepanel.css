@@ -396,3 +396,8 @@ button.chip:hover { background: var(--accent-soft); }
   *, *::before, *::after { transition: none !important; animation-duration: 0.01ms !important; }
 }
 .asset.just-added .thumb { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 9px; transition: outline-color 0.4s; }
+
+/* ---------- one-time anonymous-usage notice ---------- */
+.usage-notice { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); border: 1px solid var(--border); font-size: 12.5px; color: var(--text); }
+.usage-notice p { margin: 0; line-height: 1.45; }
+.usage-notice .row { gap: 6px; }

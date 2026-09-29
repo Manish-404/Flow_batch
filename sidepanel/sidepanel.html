@@ -33,6 +33,13 @@
         <button id="btnOpenFlow" class="link-btn">Open Flow</button>
       </div>
       </div>
+      <div id="usageNotice" class="usage-notice" role="note" hidden>
+        <p>FlowBatch counts anonymous usage (which features run, and the country), with no prompts, files or personal data. It helps show what's used.</p>
+        <div class="row">
+          <button id="btnUsageOk" class="btn btn-ghost btn-sm">OK</button>
+          <button id="btnUsageOff" class="btn btn-ghost btn-sm">Turn off</button>
+        </div>
+      </div>
 
       <!-- Upload assets -->
       <section class="card">
@@ -376,6 +383,7 @@
           <label class="toggle"><input type="checkbox" data-setting="autoNewProject" /><span></span>Create a Flow project automatically if none is open</label>
           <label class="toggle"><input type="checkbox" data-setting="geminiNewChat" /><span></span>Start a new Gemini chat for each prompt</label>
           <label class="toggle"><input type="checkbox" data-setting="geminiRemoveMark" /><span></span>Remove the visible Gemini sparkle from downloaded images</label>
+          <label class="toggle"><input type="checkbox" data-setting="shareUsage" /><span></span>Share anonymous usage counts (features used and country, no prompts, files or personal data)</label>
           <label class="toggle"><input type="checkbox" data-setting="stopOnFailure" /><span></span>Stop the queue after 3 failures in a row</label>
         </div>
         <label class="field"><span class="label">@mention text sent to Flow / Gemini</span>

@@ -3,6 +3,7 @@
 import { MODELS, GEMINI_MODELS } from './store.js';
 import { SITES, findSiteTab, callAgent, stageFiles, pinTab, unpinTab, waitTabComplete } from './site.js';
 import { downloadMedia, fetchMediaBlob } from './downloads.js';
+import { track } from './telemetry.js';
 import { cleanGeminiMedia } from './mark-clean.js';
 import { recordFlowInfo, spendOne } from './credits.js';
 import { sleep, log, pad, slug, sanitizeSegment, promptForFlow, blobToDataUrl, isVideoAsset, assetFileName, geminiChatId } from './utils.js';
@@ -349,6 +350,10 @@ export class Runner {
         }));
         item.status = 'success';
         item.error = '';
+        for (const kind of ['video', 'image']) {
+          const made = item.results.filter((r) => r.kind === kind).length;
+          if (made) track('result', `${this.site}-${kind}`, made);
+        }
         if (this.site === 'flow') spendOne(); // until Flow shows the real balance
         this.itemDurations.push(Date.now() - t0);
         log(`#${pad(item.n, 2)} done — ${media.length} result(s) in ${Math.round((Date.now() - t0) / 1000)}s`, 'ok');
@@ -370,6 +375,7 @@ export class Runner {
       }
     }
     item.status = this.stopRequested ? 'pending' : 'failed';
+    if (item.status === 'failed') track('failed', this.site);
     this.ctx.onUpdate();
     return false;
   }

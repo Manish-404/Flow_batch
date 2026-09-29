@@ -1,6 +1,7 @@
 // "Prompt input" card: highlighted editor, @mention chips/autocomplete, template expansion,
 // and the Image/Video · aspect ratio · model · count controls.
 import { app, on, emit, persistSession } from './app.js';
+import { track } from './telemetry.js';
 import { MODELS, ASPECTS, GEMINI_MODELS, GEMINI_ASPECTS, CREDIT_TABLE } from './store.js';
 import { IconSelect } from './controls.js';
 import { assetIcon } from './assets-ui.js';
@@ -172,6 +173,7 @@ function expandPerAsset() {
   t.select();
   insertAtCaret(app.assets.map((a) => build(a.name)).join(`\n${sep}\n`));
   toast(`Created ${app.assets.length} prompts`);
+  track('per-asset');
 }
 
 // ---------- template → one prompt per start → end pair ----------
@@ -228,6 +230,7 @@ function expandPerPair() {
   $('seqFrames').checked = true;
   persistSession();
   toast(`Created ${blocks.length} scene prompts${leftover ? ' (last one uses ingredients)' : ''}`);
+  track('per-pair');
   return undefined;
 }
 

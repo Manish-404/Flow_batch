@@ -2,6 +2,7 @@
 // wherever you like (Chrome's Save As dialog picks the location).
 import { buildZip } from './zip.js';
 import { downloadBlobAs } from './downloads.js';
+import { track } from './telemetry.js';
 import { $, el, extFromMime, fmtBytes, log, toast } from './utils.js';
 
 let items = [];
@@ -80,6 +81,7 @@ async function run() {
     await downloadBlobAs(zip, `${name}.zip`);
     log(`ZIP saved: ${name}.zip — ${files.length} file(s), ${fmtBytes(zip.size)}`, 'ok');
     toast(`ZIP saved · ${files.length} file${files.length === 1 ? '' : 's'}`);
+    track('zip');
     done = true;
   } catch (e) {
     const cancelled = /cancel/i.test(e.message);

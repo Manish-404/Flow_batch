@@ -21,6 +21,7 @@ export const DEFAULT_SETTINGS = {
   geminiUrl: 'https://gemini.google.com/app',
   geminiNewChat: true,
   geminiRemoveMark: true, // strip the visible Gemini sparkle from downloaded images
+  shareUsage: true, // anonymous usage counts (telemetry.js); off in Settings
   geminiMark: {}, // the sparkle's pattern, learned from your images (see watermark.js)
   geminiSelectors: { promptBox: '', submitButton: '', addImageButton: '', toolsButton: '', modelButton: '', newChatButton: '' },
 };

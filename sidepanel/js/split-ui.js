@@ -1,6 +1,7 @@
 // "Split video" card: cut the video loaded in Frame extractor into clips every N seconds,
 // then save the ones you want, zip them, or send them to Flow or Gemini as references.
 import { app, on, emit, persistSession } from './app.js';
+import { track } from './telemetry.js';
 import { getLoadedVideo } from './frames-ui.js';
 import { splitVideo, clipPlan, pickMime, toFlowMp4, FLOW_VIDEO_TYPES, FLOW_MAX_BYTES, MAX_CLIPS } from './split.js';
 import { downloadBlob } from './downloads.js';
@@ -148,6 +149,7 @@ async function run() {
     });
     const cancelled = controller.signal.aborted;
     const msg = `${cancelled ? 'Cancelled after' : 'Split into'} ${clips.length} of ${total} clip${total === 1 ? '' : 's'}`;
+    if (clips.length) track('split');
     log(`${msg} · ${mime.split(';')[0]}${o.toDownloads ? ` → Downloads/${folder()}` : ''}`, cancelled ? 'warn' : 'ok');
     toast(msg);
   } catch (e) {
@@ -169,6 +171,7 @@ async function saveSelected() {
   for (const c of chosen) await downloadBlob(c.blob, `${folder()}/${c.name}`, extFromMime(c.blob.type, 'webm'));
   log(`Saved ${chosen.length} clip(s) → Downloads/${folder()}`, 'ok');
   toast(`Saving ${chosen.length} clip${chosen.length === 1 ? '' : 's'}`);
+  track('clips-save');
 }
 
 function zipSelected() {
@@ -284,6 +287,7 @@ async function sendToSite() {
     }
     const ok = chosen.filter((c) => c.flow?.state === 'ok').length;
     log(`${name}: ${r.method} · ${ok}/${r.expected} confirmed, ${rejected} rejected, ${r.added} new on the page`, rejected || ok < r.expected ? 'warn' : 'ok');
+    track('clips-send', site);
     r.files.filter((f) => f.error).forEach((f) => log(`${name} rejected ${f.name}: ${f.error}`, 'error'));
     r.otherErrors.forEach((t) => log(`${name} message: ${t}`, 'warn'));
     if (r.openDialogs?.length) log(`${name} dialog still open: ${r.openDialogs.join(' | ')}`, 'warn');

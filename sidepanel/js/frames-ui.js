@@ -1,5 +1,6 @@
 // "Frame extractor" card.
 import { app, on, emit, persistSession } from './app.js';
+import { track } from './telemetry.js';
 import { addAssets, removeAssets } from './assets-ui.js';
 import { probeVideo, frameTimes, extractVideoFrames, captureTabStream, captureTabFrames, fetchVideoFile, MAX_FRAMES } from './frames.js';
 import { downloadBlob } from './downloads.js';
@@ -202,6 +203,7 @@ async function run() {
     await flush();
     const msg = `${controller.signal.aborted ? 'Cancelled after' : 'Captured'} ${total} frame${total === 1 ? '' : 's'}`;
     log(`${msg}${o.toAssets ? ' → assets' : ''}${o.toDownloads ? ` → Downloads/${folder}` : ''}`, 'ok');
+    track('frames', o.source || 'video');
     toast(msg);
   } catch (e) {
     await flush();

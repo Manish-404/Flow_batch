@@ -4,6 +4,7 @@ import { app, persistSession } from './app.js';
 import { generatedResults, resultBlob } from './results.js';
 import { buildZip } from './zip.js';
 import { downloadBlobAs } from './downloads.js';
+import { track } from './telemetry.js';
 import { suggestHashtags, parseTags, formatTags, promptSummary, buildCaption, DISCLOSURE_TAGS } from './hashtags.js';
 import { $, el, pad, extFromMime, fmtBytes, sanitizeSegment, isVideoAsset, log, toast } from './utils.js';
 
@@ -208,6 +209,7 @@ async function exportPlan() {
     await downloadBlobAs(zip, `${name}.zip`);
     log(`Publish batch exported: ${chosen.length} post(s), ${fmtBytes(zip.size)}`, 'ok');
     toast(`Exported ${chosen.length} post${chosen.length === 1 ? '' : 's'}`);
+    track('publish');
   } catch (e) {
     const cancelled = /cancel/i.test(e.message);
     log(cancelled ? 'Publish export cancelled' : `Publish export failed: ${e.message}`, cancelled ? 'warn' : 'error');

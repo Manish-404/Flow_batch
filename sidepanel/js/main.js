@@ -1,5 +1,6 @@
 // Side panel entry: loads state, wires the queue / controls / progress / summary / log.
-import { app, on, emit, persistSession } from './app.js';
+import { app, on, emit, persistSession, persistSettings } from './app.js';
+import { initTelemetry, track, dropQueued } from './telemetry.js';
 import { loadSettings, loadSession, listAssets } from './store.js';
 import { initAssets, addAssets, removeAllAssets } from './assets-ui.js';
 import { initPrompt, setMode, aspectMismatch } from './prompt-ui.js';
@@ -286,6 +287,8 @@ OK: start anyway · Cancel: go back and change it`)) {
   }
   persistSession();
   scheduleRender();
+  track('run', site(), app.session.queue.filter((i) => i.status === 'pending').length);
+  if (sequential()) track('seq-frames');
   runner.start();
 }
 
@@ -554,6 +557,17 @@ async function boot() {
 
   onLog(appendLog);
   initSettings();
+  initTelemetry({
+    onTurnOff: () => {
+      app.settings.shareUsage = false;
+      const box = document.querySelector('[data-setting="shareUsage"]');
+      if (box) box.checked = false;
+      persistSettings();
+      dropQueued();
+      toast('Usage counts are off — Settings can turn them back on');
+    },
+  });
+  on('settingsChanged', () => app.settings.shareUsage === false && dropQueued());
   initZip();
   initAssets();
   initPrompt();
