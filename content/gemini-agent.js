@@ -570,4 +570,119 @@
   };
 
   FB.serve(actions);
+
+  // ---------- "Send to FlowBatch" in Gemini's share dialog ----------
+  // Share on a reply opens "Shareable public link to video" (or image). FlowBatch adds a button
+  // there that sends that reply's video or image to the side panel's Upload assets, for ✦ Clean.
+  const SHARE_LABEL = /\bshare\b/i;
+  const SHARE_DIALOG = /public link to (a |the |this )?(video|image)|shareable public link/i;
+  let shareFrom = null; // the reply whose Share button was pressed last
+
+  document.addEventListener(
+    'click',
+    (e) => {
+      const b = e.target.closest?.('button, [role="button"], [role="menuitem"], a');
+      if (!b || FB.isOwn(b)) return;
+      const label = `${b.getAttribute('aria-label') || ''} ${b.getAttribute('mattooltip') || ''} ${b.getAttribute('data-test-id') || ''} ${(b.textContent || '').slice(0, 60)}`;
+      if (!SHARE_LABEL.test(label)) return;
+      const resp = b.closest(RESPONSE) || b.closest(RESPONSE_LOOSE);
+      // "Share & export" can open a menu first; its items aren't inside the reply, so keep the reply.
+      if (resp || !shareFrom || Date.now() - shareFrom.t > 30000) shareFrom = { resp, t: Date.now() };
+    },
+    true
+  );
+
+  function sharedMedia(dialog) {
+    const wantImage = /\bimage\b/i.test(norm(dialog.innerText).slice(0, 200));
+    const inside = (root) =>
+      FB.collectMedia().filter(
+        (m) => root.contains(m.el) && !m.el.closest('[role="dialog"], .cdk-overlay-container') && m.dw >= 60 && !/avatar|logo|icon/i.test(m.url)
+      );
+    const best = (list) => {
+      const videos = list.filter((m) => m.kind === 'video');
+      const images = list.filter((m) => m.kind === 'image' && FB.isResultMedia(m));
+      const pool = wantImage ? (images.length ? images : videos) : videos.length ? videos : images;
+      return pool.sort((a, b) => b.dw * b.dh - a.dw * a.dh)[0] || null;
+    };
+    if (shareFrom?.resp?.isConnected && Date.now() - shareFrom.t < 10 * 60000) {
+      const m = best(inside(shareFrom.resp));
+      if (m) return m;
+    }
+    for (const r of responses().reverse()) {
+      const m = best(inside(r));
+      if (m) return m;
+    }
+    return null;
+  }
+
+  const shareButtonStyle =
+    'display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 18px;border:0;border-radius:20px;' +
+    'background:#5b4cf0;color:#fff;font:600 14px/1 "Google Sans",Roboto,Arial,sans-serif;cursor:pointer;';
+
+  function makeShareButton(dialog) {
+    const wrap = document.createElement('div');
+    wrap.id = '__flowbatch-share';
+    wrap.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:14px 24px 4px;';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.style.cssText = shareButtonStyle;
+    btn.textContent = '✦ Send to FlowBatch';
+    btn.title = 'Add this video or image to FlowBatch → Upload assets, where ✦ Clean removes the visible sparkle';
+    const note = document.createElement('span');
+    note.setAttribute('aria-live', 'polite');
+    note.style.cssText = 'font:13px/1.4 "Google Sans",Roboto,Arial,sans-serif;opacity:.8;';
+    note.textContent = 'Opens it in FlowBatch’s Upload assets';
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const m = sharedMedia(dialog);
+      if (!m) {
+        note.textContent = 'FlowBatch couldn’t find the video in this reply. Play it once, then try again.';
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+      try {
+        const item = { ...toResult(m), name: m.kind === 'video' ? 'gemini_video' : 'gemini_image' };
+        const r = await chrome.runtime.sendMessage({ channel: 'flowbatch-import', item });
+        if (!r?.ok) throw new Error(r?.error || 'FlowBatch did not answer');
+        btn.textContent = '✓ Sent to FlowBatch';
+        note.textContent = r.opened
+          ? 'It’s being added to Upload assets. Press ✦ Clean there.'
+          : 'Open FlowBatch from the toolbar: it’s waiting for Upload assets.';
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = '✦ Send to FlowBatch';
+        note.textContent = /context invalidated/i.test(err?.message || '')
+          ? 'FlowBatch was updated. Reload this tab, then try again.'
+          : `Couldn’t send: ${err?.message || err}`;
+      }
+    });
+    wrap.append(btn, note);
+    return wrap;
+  }
+
+  function addShareButton() {
+    const candidates = $$('[role="dialog"], mat-dialog-container').filter((d) => shown(d) && SHARE_DIALOG.test(norm(d.innerText).slice(0, 300)));
+    for (const d of innermost(candidates)) {
+      if (d.querySelector('#__flowbatch-share')) continue;
+      const wrap = makeShareButton(d);
+      // Under the row with the link and "Copy link", or at the end of the dialog.
+      const copy = clickables(d).find((b) => /copy/i.test(labelOf(b)));
+      let row = copy;
+      const full = d.getBoundingClientRect().width * 0.7;
+      while (row && row.parentElement && row.parentElement !== d && row.getBoundingClientRect().width < full) row = row.parentElement;
+      if (row && row !== d && d.contains(row)) row.after(wrap);
+      else d.append(wrap);
+    }
+  }
+
+  let shareCheck = 0;
+  new MutationObserver(() => {
+    if (shareCheck) return;
+    shareCheck = requestAnimationFrame(() => {
+      shareCheck = 0;
+      addShareButton();
+    });
+  }).observe(document.body, { childList: true, subtree: true });
 })();

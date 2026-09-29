@@ -151,7 +151,9 @@ What is different from Flow:
   saved as they are. A video is first sampled at 24 points to learn the mark, then played through once and
   re-recorded as MP4 with its audio, so it takes about as long as the clip. **✦ Clean** in Upload assets does
   the same for images and clips you downloaded yourself. To check a file, press **⤢** on its tile: it opens
-  the whole image or clip, uncropped, and **🔍 Corner** zooms into the spot where the sparkle sits. Only the visible logo goes: Google's invisible
+  the whole image or clip, uncropped, and **🔍 Corner** zooms into the spot where the sparkle sits.
+  From Gemini itself: press **Share** on a video or image, then **✦ Send to FlowBatch** in the *Shareable
+  public link* dialog. It lands in Upload assets (FlowBatch opens if it was closed), ready for ✦ Clean. Only the visible logo goes: Google's invisible
   **SynthID** watermark stays in the file, so it can still be identified as AI-generated.
 
 When Gemini is selected, Settings shows **Gemini elements** — prompt box, send button, upload (+),

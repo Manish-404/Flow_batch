@@ -3,7 +3,8 @@
 import { app, on, emit, persistSession } from './app.js';
 import { putAsset, deleteAsset, clearAssets } from './store.js';
 import { openZipPicker } from './zip-ui.js';
-import { SITES, findSiteTab } from './site.js';
+import { SITES, findSiteTab, callAgent } from './site.js';
+import { fetchMediaBlob } from './downloads.js';
 import { FLOW_VIDEO_TYPES, FLOW_MAX_BYTES } from './split.js';
 import { cleanGeminiMedia } from './mark-clean.js';
 import { $, el, sanitizeName, sanitizeSegment, naturalCompare, isVideoAsset, assetFileName, geminiChatId, fmtBytes, log, toast } from './utils.js';
@@ -329,6 +330,45 @@ export function renderAssets() {
     : `Mark every asset as already uploaded to ${siteName}, so a run doesn't upload them again`;
 }
 
+// ---------- "Send to FlowBatch" from Gemini's share dialog ----------
+// background.js keeps each request in session storage until the panel takes it, so it also works
+// when the panel was closed. The file is read through the Gemini tab, which has the sign-in.
+let importing = Promise.resolve();
+
+async function importFromSite(item) {
+  const kind = item.kind === 'image' ? 'image' : 'video';
+  toast(`Getting the ${kind} from Gemini…`);
+  const readViaPage = (url) => callAgent(item.tabId, 'fetchAsDataUrl', { url }, { timeoutMs: 180000, retries: 1 });
+  let blob = null;
+  try {
+    blob = await fetchMediaBlob([item.url, ...(item.altUrls || [])], { readViaPage, viaPage: true });
+  } catch {
+    /* reported below */
+  }
+  if (!blob) {
+    log(`Could not read the ${kind} from Gemini — keep its tab open and send it again`, 'error');
+    toast(`Couldn’t get the ${kind} — keep the Gemini tab open and send it again`);
+    return;
+  }
+  const [a] = await addAssets([{ blob, name: item.name || `gemini_${kind}` }]);
+  const tile = $('assetGrid').lastElementChild;
+  tile?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  tile?.classList.add('just-added');
+  setTimeout(() => tile?.classList.remove('just-added'), 2400);
+  log(`Added @${a.name} from Gemini (${fmtBytes(blob.size)}) — press ✦ Clean to remove the sparkle`, 'ok');
+  toast(`Added @${a.name} — press ✦ Clean to remove the sparkle`);
+}
+
+async function takePendingImports() {
+  const { pendingImports = [] } = await chrome.storage.session.get('pendingImports');
+  if (!pendingImports.length) return;
+  await chrome.storage.session.set({ pendingImports: [] });
+  // Anything older than 10 minutes was sent before this panel could take it; skip it.
+  for (const item of pendingImports.filter((i) => Date.now() - (i.at || 0) < 10 * 60000)) await importFromSite(item);
+}
+
+const queueImports = () => (importing = importing.then(takePendingImports).catch((e) => log(`Import from Gemini failed: ${e.message}`, 'error')));
+
 export function initAssets() {
   const dz = $('dropzone');
   const fileInput = $('fileInput');
@@ -372,6 +412,8 @@ export function initAssets() {
   );
   $('btnMarkAssets').addEventListener('click', markAll);
   $('btnCleanAssets').addEventListener('click', cleanAssets);
+  chrome.storage.session.onChanged.addListener((c) => c.pendingImports?.newValue?.length && queueImports());
+  queueImports();
   $('viewClose').addEventListener('click', closeViewer);
   $('viewCorner').addEventListener('click', () => setCorner(!$('viewFrame').classList.contains('corner')));
   $('viewModal').addEventListener('click', (e) => e.target === $('viewModal') && closeViewer());
