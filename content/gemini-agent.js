@@ -643,46 +643,46 @@
   function makeShareButton(dialog) {
     const highlight = (_shareHighlightCount ?? 0) < 80;
     if (highlight) ensureShareStyle();
-    const wrap = document.createElement(‘div’);
-    wrap.id = ‘__flowbatch-share’;
-    wrap.style.cssText = ‘display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:14px 24px 4px;’;
-    const btn = document.createElement(‘button’);
-    btn.type = ‘button’;
+    const wrap = document.createElement("div");
+    wrap.id = "__flowbatch-share";
+    wrap.style.cssText = "display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:14px 24px 4px;";
+    const btn = document.createElement("button");
+    btn.type = "button";
     btn.style.cssText = shareButtonStyle;
-    btn.textContent = ‘✦ Send to FlowBatch’;
-    btn.title = ‘Add this video or image to FlowBatch → Upload assets, where ✦ Clean removes the visible sparkle’;
-    if (highlight) btn.setAttribute(‘data-fb-hl’, ‘1’);
-    const note = document.createElement(‘span’);
-    note.setAttribute(‘aria-live’, ‘polite’);
-    note.style.cssText = ‘font:13px/1.4 "Google Sans",Roboto,Arial,sans-serif;opacity:.8;’;
+    btn.textContent = "✦ Send to FlowBatch";
+    btn.title = "Add this video or image to FlowBatch → Upload assets, where ✦ Clean removes the visible sparkle";
+    if (highlight) btn.setAttribute("data-fb-hl", "1");
+    const note = document.createElement("span");
+    note.setAttribute("aria-live", "polite");
+    note.style.cssText = "font:13px/1.4 \"Google Sans\",Roboto,Arial,sans-serif;opacity:.8;";
     note.textContent = highlight
-      ? ‘↑ New! Sends this video or image directly to FlowBatch for ✦ Clean’
-      : ‘Opens it in FlowBatch’s Upload assets’;
-    btn.addEventListener(‘click’, async (e) => {
+      ? "↑ New! Sends this video or image directly to FlowBatch for ✦ Clean"
+      : "Opens it in FlowBatch’s Upload assets";
+    btn.addEventListener("click", async (e) => {
       e.preventDefault();
       e.stopPropagation();
       const m = sharedMedia(dialog);
       if (!m) {
-        note.textContent = ‘FlowBatch couldn’t find the video in this reply. Play it once, then try again.’;
+        note.textContent = "FlowBatch couldn’t find the video in this reply. Play it once, then try again.";
         return;
       }
       btn.disabled = true;
-      btn.removeAttribute(‘data-fb-hl’); // stop pulsing while the request is in flight
-      btn.textContent = ‘Sending…’;
+      btn.removeAttribute("data-fb-hl"); // stop pulsing while the request is in flight
+      btn.textContent = "Sending…";
       try {
-        const item = { ...toResult(m), name: m.kind === ‘video’ ? ‘gemini_video’ : ‘gemini_image’ };
-        const r = await chrome.runtime.sendMessage({ channel: ‘flowbatch-import’, item });
-        if (!r?.ok) throw new Error(r?.error || ‘FlowBatch did not answer’);
-        btn.textContent = ‘✓ Sent to FlowBatch’;
+        const item = { ...toResult(m), name: m.kind === "video" ? "gemini_video" : "gemini_image" };
+        const r = await chrome.runtime.sendMessage({ channel: "flowbatch-import", item });
+        if (!r?.ok) throw new Error(r?.error || "FlowBatch did not answer");
+        btn.textContent = "✓ Sent to FlowBatch";
         note.textContent = r.opened
-          ? ‘It’s being added to Upload assets. Press ✦ Clean there.’
-          : ‘Open FlowBatch from the toolbar: it’s waiting for Upload assets.’;
+          ? "It’s being added to Upload assets. Press ✦ Clean there."
+          : "Open FlowBatch from the toolbar: it’s waiting for Upload assets.";
       } catch (err) {
         btn.disabled = false;
-        if (highlight) btn.setAttribute(‘data-fb-hl’, ‘1’); // restore glow on error so user retries
-        btn.textContent = ‘✦ Send to FlowBatch’;
-        note.textContent = /context invalidated/i.test(err?.message || ‘’)
-          ? ‘FlowBatch was updated. Reload this tab, then try again.’
+        if (highlight) btn.setAttribute("data-fb-hl", "1"); // restore glow on error so user retries
+        btn.textContent = "✦ Send to FlowBatch";
+        note.textContent = /context invalidated/i.test(err?.message || "")
+          ? "FlowBatch was updated. Reload this tab, then try again."
           : `Couldn’t send: ${err?.message || err}`;
       }
     });
