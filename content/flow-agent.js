@@ -548,7 +548,47 @@
   // what a generation costs ("Generating will use 10 credits").
   const COST_WORDS = /\b(will use|uses?|costs?|per (generation|video|image|prompt)|generating)\b/i;
   const toNumber = (n, k) => Math.round(Number(n.replace(/,/g, '')) * (k ? 1000 : 1));
+  // Flow's account panel (opened from the profile avatar) shows the balance as a link:
+  // flow-account-panel > div[2] > div[3] > div > div > a. It is read even while hidden, in case
+  // Flow keeps the panel on the page when closed.
+  const ACCOUNT_LINK = ':scope > div:nth-of-type(2) > div:nth-of-type(3) > div > div > a';
+  const NUMBER = /(\d[\d,]*(?:\.\d+)?)\s*([kK])?\b/;
+  function readAccountPanel() {
+    for (const panel of $$('flow-account-panel')) {
+      const exact = panel.querySelector(ACCOUNT_LINK);
+      const m = norm(exact?.textContent).match(NUMBER);
+      if (m) return toNumber(m[1], m[2]);
+      // Layout moved: any link or line in the panel that names credits and holds a number.
+      for (const el of panel.querySelectorAll('a, button, span, div, p')) {
+        if (el.childElementCount > 3) continue;
+        const t = norm(el.textContent);
+        if (t.length > 80 || !/credit/i.test(t) || COST_WORDS.test(t)) continue;
+        const n = t.match(NUMBER);
+        if (n) return toNumber(n[1], n[2]);
+      }
+    }
+    return null;
+  }
+
+  // The profile avatar in Flow's header, which opens the account panel.
+  function accountButton() {
+    const inHeader = (el) => {
+      const r = el.getBoundingClientRect();
+      return r.top < 140 && r.left > innerWidth * 0.5;
+    };
+    const clickable = (el) => el.closest('button, [role="button"], a, [tabindex]') || el;
+    const photo = $$('img').find((i) => isShown(i) && inHeader(i) && /googleusercontent\.com\/a\/|\/a-\/|avatar|profile/i.test(i.src + ' ' + (i.alt || '')));
+    if (photo) return clickable(photo);
+    return (
+      $$('button, [role="button"], a').find(
+        (b) => isShown(b) && !FB.isOwn(b) && inHeader(b) && /google account|account|profile|avatar/i.test(`${b.getAttribute('aria-label') || ''} ${b.title || ''}`)
+      ) || null
+    );
+  }
+
   function readBalance() {
+    const fromPanel = readAccountPanel();
+    if (fromPanel != null) return fromPanel;
     for (const t of FB.collectText(/credit/i, 120)) {
       if (COST_WORDS.test(t)) continue;
       const m =
@@ -570,17 +610,23 @@
       const header = (el) => el.getBoundingClientRect().top < 140;
       const badge = $$('span, div, button, a').find((el) => el.childElementCount === 0 && isShown(el) && header(el) && PLAN.test(norm(el.textContent)));
       const tries = [
+        accountButton(), // opens flow-account-panel, where the balance is
         badge?.closest('button, [role="button"], a:not([href^="http"])') || badge,
         ...$$('button, [role="button"]').filter((b) => isShown(b) && /credit/i.test(`${b.getAttribute('aria-label') || ''} ${b.title || ''} ${norm(b.innerText)}`)),
         ...$$('button, [role="button"]').filter((b) => isShown(b) && header(b) && /account|profile|avatar/i.test(`${b.getAttribute('aria-label') || ''} ${b.title || ''}`)),
       ].filter((b, i, a) => b && !FB.isOwn(b) && a.indexOf(b) === i);
-      for (const b of tries.slice(0, 3)) {
+      for (const b of tries.slice(0, 4)) {
         realClick(b);
-        credits = (await waitFor(() => (readBalance() != null ? { n: readBalance() } : null), 2000, 200))?.n ?? null;
+        credits = (await waitFor(() => (readBalance() != null ? { n: readBalance() } : null), 3000, 200))?.n ?? null;
         FB.pressKey(document.activeElement || document.body, 'Escape');
         await sleep(300);
+        // The account panel may ignore Escape: click its button again to close it.
+        if ($$('flow-account-panel').some(isShown) && b === tries[0]) {
+          realClick(b);
+          await sleep(300);
+        }
         if (credits != null) {
-          via = 'menu';
+          via = b === tries[0] ? 'account panel' : 'menu';
           break;
         }
       }

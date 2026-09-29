@@ -406,6 +406,7 @@ function setSite(next) {
 }
 
 let connSeq = 0;
+const creditTabsTried = new Set(); // Flow tabs whose account panel has been read once
 async function refreshConnection() {
   const seq = ++connSeq;
   const current = site();
@@ -426,7 +427,15 @@ async function refreshConnection() {
     }
     $('btnOpenFlow').hidden = true;
     const info = await callAgent(tab.id, 'ping', { selectors: SITES[current].selectors(app.settings) }, { timeoutMs: 4000, retries: 1 });
-    if (current === 'flow') recordBalance(info);
+    if (current === 'flow') {
+      recordBalance(info);
+      // A Flow tab seen for the first time with no balance on the page: read Flow's account panel
+      // once (it opens and closes quickly), rather than waiting for ↻ or the 10-minute check.
+      if (info.credits == null && !balance() && !creditTabsTried.has(tab.id) && app.runner.state === 'idle' && info.hasPromptBox) {
+        creditTabsTried.add(tab.id);
+        setTimeout(() => refreshCredits({ deep: true }), 500);
+      }
+    }
     if (current === 'gemini') {
       if (info.hasPromptBox) show('ok', 'Gemini connected');
       else show('warn', 'Gemini open — prompt box not found (signed in?)');
