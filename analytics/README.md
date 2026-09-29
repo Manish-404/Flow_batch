@@ -9,6 +9,8 @@ A Cloudflare Worker with a D1 (SQLite) database, both on the free plan: no card,
 What's stored and what isn't: see "Usage stats and privacy" in the main README. No IP addresses are
 stored; the country comes from Cloudflare's `request.cf.country`.
 
+Live at <https://flowbatch-stats.flowbatch-stats.workers.dev> (totals: `/stats`).
+
 ## Deploy (once)
 
 Run in this folder (`analytics/`). If your npm registry is set to plain `http`, add

@@ -7,4 +7,4 @@ compatibility_date = "2025-09-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "flowbatch-stats"
-database_id = "REPLACE_WITH_ID_FROM_d1_create"
+database_id = "df27b45d-9c15-4ce6-b2f3-c2b3ccf1a444"

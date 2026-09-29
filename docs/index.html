@@ -1890,7 +1890,7 @@ Convert <span class="mention">@f_003</span> in the same style. Golden hour.</pre
   <script>
     /* Usage: totals from FlowBatch's stats endpoint (analytics/ in the repo). Hidden until set. */
     (() => {
-      const STATS_URL = '';
+      const STATS_URL = 'https://flowbatch-stats.flowbatch-stats.workers.dev';
       const section = document.getElementById('usage');
       if (!STATS_URL || !section) return;
       const FEATURES = {
@@ -1919,6 +1919,7 @@ Convert <span class="mention">@f_003</span> in the same style. Golden hour.</pre
       fetch(`${STATS_URL}/stats`)
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
         .then((s) => {
+          if (!s.installs) return; // nobody counted yet: keep the section hidden rather than show zeros
           const set = (id, v) => (document.getElementById(id).textContent = fmt(v));
           set('uUsers', s.installs);
           set('uActive', s.active && s.active.days7);

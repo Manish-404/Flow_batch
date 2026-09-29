@@ -7,7 +7,7 @@
 import { app } from './app.js';
 
 /** The deployed endpoint (analytics/README.md). Nothing is recorded or sent while this is empty. */
-export const STATS_URL = '';
+export const STATS_URL = 'https://flowbatch-stats.flowbatch-stats.workers.dev';
 
 const QUEUE_KEY = 'telemetryQueue';
 const ID_KEY = 'telemetryId';
