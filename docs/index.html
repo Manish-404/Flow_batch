@@ -794,6 +794,28 @@
     }
     .p-note { margin: 18px 0 0; color: var(--muted); font-size: 14.5px; }
 
+    /* ---------- usage (live counts from the stats endpoint) ---------- */
+    .u-sub { margin: 14px 0 0; color: var(--muted); font-size: 15.5px; }
+    .u-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+    @media (max-width: 940px) { .u-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @media (max-width: 560px) { .u-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .u-tile { padding: 18px 20px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--border); box-shadow: var(--shadow); }
+    .u-num { display: block; font-size: clamp(1.6rem, 3vw, 2.1rem); font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+    .u-lbl { display: block; margin-top: 2px; color: var(--muted); font-size: 14px; }
+    .u-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+    @media (max-width: 760px) { .u-grid { grid-template-columns: minmax(0, 1fr); } }
+    .u-card { padding: 22px 24px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--border); box-shadow: var(--shadow); }
+    .u-card h3 { margin: 0; font-size: 1.05rem; }
+    .u-note { margin: 2px 0 14px; color: var(--faint); font-size: 13.5px; }
+    .u-bars { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+    .u-bars li { display: grid; grid-template-columns: minmax(0, 11em) minmax(0, 1fr) auto; align-items: center; gap: 12px; border-radius: 6px; }
+    .u-bars li:hover { background: var(--hover); }
+    .u-name { overflow: hidden; font-size: 14.5px; white-space: nowrap; text-overflow: ellipsis; }
+    .u-track { height: 10px; }
+    .u-fill { display: block; height: 100%; min-width: 4px; border-radius: 0 4px 4px 0; background: var(--accent); }
+    .u-val { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+    @media (max-width: 480px) { .u-bars li { grid-template-columns: minmax(0, 8em) minmax(0, 1fr) auto; } }
+
     /* ---------- faq ---------- */
     .faq { max-width: 820px; margin-inline: auto; }
     .faq details { border-bottom: 1px solid var(--border); }
@@ -895,6 +917,7 @@
         <a href="#features">Features</a>
         <a href="#install">Install</a>
         <a href="#faq">FAQ</a>
+        <a href="#usage" id="navUsage" hidden>Usage</a>
       </nav>
       <div class="head-actions">
         <button class="theme-toggle" type="button" id="themeToggle" aria-label="Switch between light and dark theme"><svg class="i moon" aria-hidden="true"><use href="#i-moon"/></svg><svg class="i sun" aria-hidden="true"><use href="#i-sun"/></svg></button>
@@ -1502,18 +1525,18 @@ Convert <span class="mention">@f_003</span> in the same style. Golden hour.</pre
       <div class="wrap">
         <div class="section-head">
           <p class="kicker">Privacy</p>
-          <h2 id="privacy-title">It runs in your browser, and nowhere else</h2>
+          <h2 id="privacy-title">Your work stays in your browser</h2>
         </div>
         <div class="p-grid">
           <div class="p-card">
             <div class="ic"><svg class="i" aria-hidden="true"><use href="#i-shield"/></svg></div>
-            <h3>No server, no account, no analytics</h3>
-            <p>FlowBatch has no server of its own and collects nothing. Your prompts and images go only to the Flow or Gemini page you're using.</p>
+            <h3>Anonymous usage counts, and nothing else</h3>
+            <p>To show how it's used, FlowBatch counts which features run, with a random install ID and its version. Cloudflare adds the country; no IP is stored. Prompts, images, file names and links are never sent. Turn it off in Settings → <b>Share anonymous usage counts</b>.</p>
           </div>
           <div class="p-card">
             <div class="ic"><svg class="i" aria-hidden="true"><use href="#i-link"/></svg></div>
             <h3>It only talks to what you point it at</h3>
-            <p>That means the Flow or Gemini tab you're using, Google's file servers for your results, and a video link if you paste one.</p>
+            <p>That means the Flow or Gemini tab you're using, Google's file servers for your results, a video link if you paste one, and FlowBatch's own usage counter.</p>
           </div>
           <div class="p-card">
             <div class="ic"><svg class="i" aria-hidden="true"><use href="#i-user"/></svg></div>
@@ -1543,7 +1566,7 @@ Convert <span class="mention">@f_003</span> in the same style. Golden hour.</pre
             <dd>To show FlowBatch beside the page you're working on.</dd>
           </dl>
         </details>
-        <p class="p-note">This website has no cookies or analytics of its own. The Instagram reels on this page load from Instagram, which sets its own cookies, only if you press Load.</p>
+        <p class="p-note">This website has no cookies or analytics of its own; the Usage section only reads the published totals. The Instagram reels on this page load from Instagram, which sets its own cookies, only if you press Load.</p>
       </div>
     </section>
 
@@ -1586,6 +1609,35 @@ Convert <span class="mention">@f_003</span> in the same style. Golden hour.</pre
             <summary>Will it post to Instagram or YouTube for me?</summary>
             <p>No. The Publish queue prepares captions, hashtags and times and exports them. You then schedule the posts in Meta Business Suite or YouTube Studio. FlowBatch never asks for your social logins.</p>
           </details>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="usage" aria-labelledby="usage-title" hidden>
+      <div class="wrap">
+        <div class="section-head">
+          <p class="kicker">Usage</p>
+          <h2 id="usage-title">How FlowBatch is being used</h2>
+          <p class="u-sub">Live, anonymous counts from everyone who leaves usage sharing on. <span id="uUpdated"></span></p>
+        </div>
+        <div class="u-tiles">
+          <div class="u-tile"><span class="u-num" id="uUsers">–</span><span class="u-lbl">people have used it</span></div>
+          <div class="u-tile"><span class="u-num" id="uActive">–</span><span class="u-lbl">active in the last 7 days</span></div>
+          <div class="u-tile"><span class="u-num" id="uSessions">–</span><span class="u-lbl">sessions so far</span></div>
+          <div class="u-tile"><span class="u-num" id="uVideos">–</span><span class="u-lbl">videos made</span></div>
+          <div class="u-tile"><span class="u-num" id="uImages">–</span><span class="u-lbl">images made</span></div>
+        </div>
+        <div class="u-grid">
+          <div class="u-card">
+            <h3>Most used features</h3>
+            <p class="u-note">Times used, last 30 days</p>
+            <ol class="u-bars" id="uFeatures"></ol>
+          </div>
+          <div class="u-card">
+            <h3>Where people use it</h3>
+            <p class="u-note">People, by country</p>
+            <ol class="u-bars" id="uCountries"></ol>
+          </div>
         </div>
       </div>
     </section>
@@ -1833,6 +1885,54 @@ Convert <span class="mention">@f_003</span> in the same style. Golden hour.</pre
         device.addEventListener('change', show);
         show();
       }
+    })();
+  </script>
+  <script>
+    /* Usage: totals from FlowBatch's stats endpoint (analytics/ in the repo). Hidden until set. */
+    (() => {
+      const STATS_URL = '';
+      const section = document.getElementById('usage');
+      if (!STATS_URL || !section) return;
+      const FEATURES = {
+        run: 'Queue runs', frames: 'Frame extraction', split: 'Video splitting', 'clips-save': 'Clips saved',
+        'clips-send': 'Clips sent to Flow or Gemini', zip: 'ZIP downloads', publish: 'Publish exports',
+        sparkle: 'Gemini sparkle removal', 'per-asset': 'One prompt per asset', 'per-pair': 'Frame-pair prompts',
+        'seq-frames': 'Start → end frame videos', 'gemini-share': 'Send to FlowBatch from Gemini',
+      };
+      const fmt = (n) => Number(n || 0).toLocaleString();
+      const regions = window.Intl && Intl.DisplayNames ? new Intl.DisplayNames(['en'], { type: 'region' }) : null;
+      const country = (cc) => (cc === 'XX' ? 'Unknown' : cc === 'T1' ? 'Tor' : (regions && regions.of(cc)) || cc);
+      const bars = (list, rows) => {
+        const max = Math.max(1, ...rows.map((r) => r.n));
+        list.replaceChildren(...rows.map((r) => {
+          const li = document.createElement('li');
+          li.title = `${r.label}: ${fmt(r.n)}`;
+          const name = Object.assign(document.createElement('span'), { className: 'u-name', textContent: r.label });
+          const track = Object.assign(document.createElement('span'), { className: 'u-track' });
+          const fill = Object.assign(document.createElement('span'), { className: 'u-fill' });
+          fill.style.width = `${(r.n / max) * 100}%`;
+          track.append(fill);
+          li.append(name, track, Object.assign(document.createElement('span'), { className: 'u-val', textContent: fmt(r.n) }));
+          return li;
+        }));
+      };
+      fetch(`${STATS_URL}/stats`)
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
+        .then((s) => {
+          const set = (id, v) => (document.getElementById(id).textContent = fmt(v));
+          set('uUsers', s.installs);
+          set('uActive', s.active && s.active.days7);
+          set('uSessions', s.sessions);
+          set('uVideos', s.made && s.made.video);
+          set('uImages', s.made && s.made.image);
+          const feats = ((s.features && s.features.days30) || []).filter((f) => FEATURES[f.event]).slice(0, 8);
+          bars(document.getElementById('uFeatures'), feats.map((f) => ({ label: FEATURES[f.event], n: f.n })));
+          bars(document.getElementById('uCountries'), (s.countries || []).slice(0, 8).map((c) => ({ label: country(c.country), n: c.n })));
+          if (s.updatedAt) document.getElementById('uUpdated').textContent = `Updated ${new Date(s.updatedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}.`;
+          section.hidden = false;
+          document.getElementById('navUsage').hidden = false;
+        })
+        .catch(() => {}); // endpoint down: the section stays hidden
     })();
   </script>
 </body>

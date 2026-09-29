@@ -348,6 +348,32 @@ IDs. If a step fails (see **Activity log**):
 4. If mode, ratio, model or count (Gemini: tool or model) can't be found, the log says so and the run continues. Set
    those options once by hand, or turn off *Apply mode / ratio / model / count*.
 
+## Usage stats and privacy
+
+FlowBatch counts how it's used, anonymously, so the project page can show how many people use it, how
+many videos and images they make, which features they use most, and where they are. It's **on by
+default**. Turn it off in **Settings → Share anonymous usage counts**, or with **Turn off** on the notice
+the panel shows the first time. Turning it off also deletes anything not sent yet.
+
+**What is sent:**
+
+- a random install ID made on your computer, not tied to you or your Google account;
+- the extension version;
+- counts such as "2 videos made in Gemini", "1 frame extraction" or "a ZIP downloaded".
+
+**What is never sent:** your prompts, images, videos, file or asset names, links, error messages,
+or anything from the Flow or Gemini page.
+
+The counts go to FlowBatch's own endpoint (`analytics/`, a Cloudflare Worker). Cloudflare adds the
+two-letter country of the request; the IP address itself is not stored. The website shows only totals.
+
+### Deploying the stats endpoint (for the maintainer)
+
+`analytics/` holds the Worker and its database schema. It runs on Cloudflare's free plan: no card, and
+100,000 requests a day. The steps are in [analytics/README.md](analytics/README.md). Until the endpoint
+URL is filled in (`STATS_URL` in `sidepanel/js/telemetry.js` and in `docs/index.html`), nothing is
+recorded or sent and the website's Usage section stays hidden.
+
 ## Files
 
 | Path | Purpose |
@@ -360,6 +386,8 @@ IDs. If a step fails (see **Activity log**):
 | `content/gemini-agent.js` | The same actions for Gemini, plus `newChat`; replies, tools and the model picker |
 | `sidepanel/js/site.js` | The two sites: finding their tab, talking to their agent, streaming files into it |
 | `sidepanel/js/runner.js` | Queue loop: upload → type → submit → wait → download → delay |
+| `sidepanel/js/telemetry.js` | Anonymous usage counts: queue, batching, the one-time notice, the off switch |
+| `analytics/` | The stats endpoint: Cloudflare Worker (`src/index.js`), D1 schema, deploy steps |
 | `sidepanel/js/frames.js` | Frame extraction: local/URL video seeking, and `tabCapture` of the active tab |
 | `sidepanel/js/zip.js` | ZIP writer (stored entries, ZIP64 when an archive needs it) |
 | `sidepanel/js/zip-ui.js` | The "pick what goes in the ZIP" sheet |
