@@ -1,0 +1,10 @@
+# FlowBatch usage stats: a Cloudflare Worker with a D1 database, both on the free plan.
+# Deploy steps are in analytics/README.md.
+name = "flowbatch-stats"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "flowbatch-stats"
+database_id = "REPLACE_WITH_ID_FROM_d1_create"

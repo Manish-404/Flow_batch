@@ -11,3 +11,4 @@
 
 # Leave the website and its media out of GitHub's "Download ZIP", so the download is just the extension
 /docs export-ignore
+/analytics export-ignore

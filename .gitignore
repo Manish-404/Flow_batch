@@ -37,3 +37,6 @@ claude-notes/
 
 # Launch video output (brag-slim)
 brag-output/
+
+# Stats endpoint: local Wrangler state
+analytics/.wrangler/
