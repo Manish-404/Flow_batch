@@ -2,6 +2,7 @@
 //
 //   POST /e      the extension's batched events: { uid, v, events: [{ e, d?, n? }] }
 //   GET  /stats  totals for the website — aggregates only, cached for 10 minutes
+//                (includes people active per day per country, last 90 days)
 //
 // Stored: a random install ID, feature counts per day, the extension version, and the two-letter
 // country Cloudflare attaches to the request (request.cf.country). Never stored: IP addresses,
@@ -124,7 +125,8 @@ async function stats(request, env, ctx) {
   const d7 = daysAgo(6);
   const d30 = daysAgo(29);
   const q = (sql, ...args) => env.DB.prepare(sql).bind(...args);
-  const [installs, a1, a7, a30, sessions, results, runs, featuresAll, features30, countries, daily] = await env.DB.batch([
+  const d90 = daysAgo(89);
+  const [installs, a1, a7, a30, sessions, results, runs, featuresAll, features30, countries, daily, byCountry] = await env.DB.batch([
     q('SELECT COUNT(*) AS n FROM users'),
     q('SELECT COUNT(DISTINCT uid) AS n FROM active WHERE day >= ?', d0),
     q('SELECT COUNT(DISTINCT uid) AS n FROM active WHERE day >= ?', d7),
@@ -136,6 +138,8 @@ async function stats(request, env, ctx) {
     q("SELECT event, SUM(n) AS n FROM counts WHERE event NOT IN ('session', 'result', 'failed') AND day >= ? GROUP BY event ORDER BY n DESC", d30),
     q('SELECT country, COUNT(*) AS n FROM users GROUP BY country ORDER BY n DESC LIMIT 20'),
     q('SELECT day, COUNT(*) AS n FROM active WHERE day >= ? GROUP BY day ORDER BY day', d30),
+    // people active per day per country (a person counts under the country last seen for their install)
+    q('SELECT a.day AS day, u.country AS country, COUNT(*) AS n FROM active a JOIN users u ON u.uid = a.uid WHERE a.day >= ? GROUP BY a.day, u.country ORDER BY a.day', d90),
   ]);
 
   const one = (r) => r.results?.[0]?.n ?? 0;
@@ -156,6 +160,7 @@ async function stats(request, env, ctx) {
     features: { allTime: featuresAll.results, days30: features30.results },
     countries: countries.results,
     dailyActive: daily.results,
+    dailyByCountry: byCountry.results,
   };
   const response = json(body, 200, { 'Cache-Control': `public, max-age=${CACHE_SECONDS}` });
   ctx.waitUntil(cache.put(key, response.clone()));
