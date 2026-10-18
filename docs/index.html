@@ -712,13 +712,20 @@
     }
     .round:hover { border-color: var(--faint); }
     .round:disabled { opacity: 0.35; cursor: default; }
-    @media (max-width: 700px) { .strip-nav { display: none; } }
+    .round[hidden] { display: none; }
+    .auto-toggle .i { width: 16px; height: 16px; }
+    .auto-toggle .tg-play, .auto-toggle[data-state="paused"] .tg-pause { display: none; }
+    .auto-toggle[data-state="paused"] .tg-play { display: block; }
+    /* On phones the arrows go (you swipe), but the pause button stays */
+    @media (max-width: 700px) { .strip-nav .round:not(.auto-toggle) { display: none; } }
     .strip {
       --edge: max(var(--gutter), calc((100% - var(--maxw)) / 2));
       display: flex; gap: 18px; overflow-x: auto; overscroll-behavior-x: contain;
       padding: 6px var(--edge) 28px; scroll-padding-inline: var(--edge); scroll-snap-type: x mandatory;
       scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent;
     }
+    /* Snap points would pull every auto-scroll step back, so they're off while it runs */
+    .strip.auto { scroll-snap-type: none; }
     .g { flex: 0 0 auto; width: 250px; scroll-snap-align: start; color: var(--text); text-decoration: none; }
     @media (max-width: 480px) { .g { width: 72vw; } }
     .g-frame {
@@ -1408,6 +1415,7 @@ Convert <span class="mention">@f_003</span> in the same style. Golden hour.</pre
           <p class="sub">Select a screen to see it full size.</p>
         </div>
         <div class="strip-nav">
+          <button class="round auto-toggle" type="button" data-strip-auto data-state="playing" aria-controls="strip" aria-label="Pause auto-scroll" title="Pause auto-scroll" hidden><svg class="i i-fill tg-pause" aria-hidden="true"><use href="#i-pause"/></svg><svg class="i i-fill tg-play" aria-hidden="true"><use href="#i-play"/></svg></button>
           <button class="round" type="button" data-strip="-1" aria-controls="strip" aria-label="Scroll screens left"><svg class="i" aria-hidden="true"><use href="#i-left"/></svg></button>
           <button class="round" type="button" data-strip="1" aria-controls="strip" aria-label="Scroll screens right"><svg class="i" aria-hidden="true"><use href="#i-right"/></svg></button>
         </div>
@@ -1787,6 +1795,101 @@ Convert <span class="mention">@f_003</span> in the same style. Golden hour.</pre
         strip.addEventListener('scroll', update, { passive: true });
         window.addEventListener('resize', update);
         update();
+      }
+
+      /* The strip also drifts to the right on its own, slowly, and turns round at either end. It stands still
+         while the visitor hovers, touches, scrolls or tabs into it, and the Pause button stops it for good.
+         Not started at all when the visitor prefers reduced motion. */
+      const autoToggle = document.querySelector('[data-strip-auto]');
+      if (strip && autoToggle && !reduce) {
+        const SPEED = 36;   // px per second
+        const REST = 1500;  // ms to rest at either end
+        const IDLE = 3000;  // ms to wait after the visitor last moved the strip
+        const lightbox = document.getElementById('lightbox');
+        let pos = strip.scrollLeft;
+        let written = pos;
+        let dir = 1;
+        let rest = 0;
+        let hold = 0;
+        let last = 0;
+        let frame = 0;
+        let inView = false;
+        let off = false;
+        let hovering = false;
+
+        const tick = (now) => {
+          frame = requestAnimationFrame(tick);
+          const dt = Math.min(Math.max(now - last, 0), 64);
+          last = now;
+          // Something else moved it (hand, keys, scrollbar, an arrow): leave it alone for a while
+          if (Math.abs(strip.scrollLeft - written) > 2) hold = Math.max(hold, now + IDLE);
+          const busy = now < hold || hovering || lightbox?.open
+            || strip.matches(':focus-visible') || strip.querySelector(':focus-visible');
+          if (busy) {
+            pos = written = strip.scrollLeft;
+            rest = 0;
+            return;
+          }
+          if (now < rest) return;
+          const max = strip.scrollWidth - strip.clientWidth;
+          if (max <= 0) return;
+          // Keep the position as a float: some browsers round scrollLeft, which would stall a slow drift
+          pos = Math.min(Math.max(pos + (dir * SPEED * dt) / 1000, 0), max);
+          strip.scrollLeft = written = pos;
+          if ((dir > 0 && pos >= max) || (dir < 0 && pos <= 0)) {
+            dir = -dir;
+            rest = now + REST;
+          }
+        };
+        const start = () => {
+          if (frame || !inView || off) return;
+          last = performance.now();
+          pos = written = strip.scrollLeft;
+          frame = requestAnimationFrame(tick);
+        };
+        const stop = () => {
+          cancelAnimationFrame(frame);
+          frame = 0;
+        };
+        const settle = () => { hold = performance.now() + IDLE; };
+        const grab = () => { hold = Infinity; };
+
+        strip.classList.add('auto');
+        autoToggle.hidden = false;
+        new IntersectionObserver((entries) => {
+          inView = entries[0].isIntersecting;
+          if (inView) start(); else stop();
+        }, { threshold: 0.3 }).observe(strip);
+
+        strip.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') hovering = true; });
+        strip.addEventListener('pointerleave', (e) => {
+          if (e.pointerType !== 'mouse') return;
+          hovering = false;
+          settle();
+        });
+        strip.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse') grab(); });
+        window.addEventListener('pointerup', (e) => { if (e.pointerType === 'mouse' && hold === Infinity) settle(); });
+        // Touch events keep firing while the browser pans the strip; pointer events are cancelled at that point
+        strip.addEventListener('touchstart', grab, { passive: true });
+        strip.addEventListener('touchend', settle, { passive: true });
+        strip.addEventListener('touchcancel', settle, { passive: true });
+        strip.addEventListener('wheel', settle, { passive: true });
+        strip.addEventListener('keydown', settle);
+        arrows.forEach((button) => button.addEventListener('click', settle));
+
+        autoToggle.addEventListener('click', () => {
+          off = !off;
+          const label = off ? 'Play auto-scroll' : 'Pause auto-scroll';
+          autoToggle.dataset.state = off ? 'paused' : 'playing';
+          autoToggle.setAttribute('aria-label', label);
+          autoToggle.title = label;
+          if (off) stop();
+          else {
+            hold = 0;
+            start();
+          }
+          if (live) live.textContent = off ? 'Auto-scroll paused' : 'Auto-scroll playing';
+        });
       }
 
       /* Walkthrough chapters: jump the player to a step (the links open the MP4 at that time without JS) */
