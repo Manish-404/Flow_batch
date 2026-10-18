@@ -1798,7 +1798,7 @@ Convert <span class="mention">@f_003</span> in the same style. Golden hour.</pre
       }
 
       /* The strip also drifts to the right on its own, slowly, and turns round at either end. It stands still
-         while the visitor hovers, touches, scrolls or tabs into it, and the Pause button stops it for good.
+         while the visitor presses, touches, scrolls or tabs into it (hovering does not stop it), and the Pause button stops it for good.
          Not started at all when the visitor prefers reduced motion. */
       const autoToggle = document.querySelector('[data-strip-auto]');
       if (strip && autoToggle && !reduce) {
@@ -1815,7 +1815,6 @@ Convert <span class="mention">@f_003</span> in the same style. Golden hour.</pre
         let frame = 0;
         let inView = false;
         let off = false;
-        let hovering = false;
 
         const tick = (now) => {
           frame = requestAnimationFrame(tick);
@@ -1823,7 +1822,7 @@ Convert <span class="mention">@f_003</span> in the same style. Golden hour.</pre
           last = now;
           // Something else moved it (hand, keys, scrollbar, an arrow): leave it alone for a while
           if (Math.abs(strip.scrollLeft - written) > 2) hold = Math.max(hold, now + IDLE);
-          const busy = now < hold || hovering || lightbox?.open
+          const busy = now < hold || lightbox?.open
             || strip.matches(':focus-visible') || strip.querySelector(':focus-visible');
           if (busy) {
             pos = written = strip.scrollLeft;
@@ -1861,12 +1860,6 @@ Convert <span class="mention">@f_003</span> in the same style. Golden hour.</pre
           if (inView) start(); else stop();
         }, { threshold: 0.3 }).observe(strip);
 
-        strip.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') hovering = true; });
-        strip.addEventListener('pointerleave', (e) => {
-          if (e.pointerType !== 'mouse') return;
-          hovering = false;
-          settle();
-        });
         strip.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse') grab(); });
         window.addEventListener('pointerup', (e) => { if (e.pointerType === 'mouse' && hold === Infinity) settle(); });
         // Touch events keep firing while the browser pans the strip; pointer events are cancelled at that point
