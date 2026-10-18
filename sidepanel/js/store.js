@@ -35,6 +35,8 @@ export const DEFAULT_SESSION = {
   model: 'nano-banana-pro',
   count: 1,
   seqFrames: false,
+  flowUploads: { project: '', keys: [] }, // images already uploaded to this Flow project (name|bytes)
+  duration: 'auto', // video seconds, or 'auto' = the Flow length closest to the frame interval
   overlapPairs: false,
   gemini: { model: 'keep', aspect: 'keep' },
   queue: [],

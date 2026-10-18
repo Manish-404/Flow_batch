@@ -245,6 +245,7 @@ function renderControls() {
   $('btnPause').disabled = state !== 'running' || app.runner.pauseRequested;
   $('btnStop').disabled = state === 'idle';
   $('btnNewProject').disabled = state === 'running';
+  $('btnClearQueue').disabled = state === 'running';
   // A run (or a paused one) belongs to the site it started on.
   document.querySelectorAll('[data-site]').forEach((b) => (b.disabled = state !== 'idle'));
 }
@@ -319,6 +320,23 @@ OK: start anyway · Cancel: go back and change it`)) {
   track('run', site(), app.session.queue.filter((i) => i.status === 'pending').length);
   if (sequential()) track('seq-frames');
   runner.start();
+}
+
+/** Empty the queue but stay in the same Flow project, keeping the memory of its uploads. */
+function clearQueue() {
+  if (app.runner.state === 'running') return toast('Stop the run first');
+  const q = app.session.queue;
+  if (!q.length) return undefined;
+  const open = q.filter((i) => i.status === 'pending' || i.status === 'failed').length;
+  if (open && !confirm(`Clear the work queue? ${open} prompt(s) haven't finished. Prompts, assets and the list of uploaded images are kept.`)) return undefined;
+  if (app.runner.state === 'paused') app.runner.stop();
+  app.session.queue = [];
+  lastStep = '';
+  persistSession();
+  scheduleRender();
+  log('Work queue cleared — still in the same project, earlier uploads remembered');
+  toast('Queue cleared');
+  return undefined;
 }
 
 /** Flow: a new project. Gemini: a new chat. Both clear the work queue. */
@@ -613,6 +631,7 @@ async function boot() {
   $('btnPause').addEventListener('click', () => app.runner.pause());
   $('btnStop').addEventListener('click', () => app.runner.stop());
   $('btnNewProject').addEventListener('click', newProject);
+  $('btnClearQueue').addEventListener('click', clearQueue);
   $('btnSummaryNew').addEventListener('click', newProject);
   $('btnRegenerate').addEventListener('click', () => {
     app.session.queue.forEach((i) => {

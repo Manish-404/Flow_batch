@@ -191,7 +191,7 @@
         <div class="row between">
           <div class="row">
             <button id="btnPerAsset" class="btn btn-ghost btn-sm" title="Use the first prompt as a template and create one prompt per asset">⚡ One prompt per asset</button>
-            <button id="btnPerPair" class="btn btn-ghost btn-sm" data-video-mode data-flow-only hidden title="Use the first prompt as a template and create one prompt per start → end pair">🎬 One prompt per frame pair</button>
+            <button id="btnPerPair" class="btn btn-ghost btn-sm" data-video-mode data-flow-only hidden title="Use the first prompt as a template (or a built-in consistency prompt if the box is empty) and create one prompt per start → end pair">🎬 One prompt per frame pair</button>
           </div>
           <span id="promptWarn" class="warn small"></span>
         </div>
@@ -218,6 +218,16 @@
             <button class="seg-btn" data-count="3">x3</button>
             <button class="seg-btn" data-count="4">x4</button>
           </div>
+          <div class="field" data-video-mode data-flow-only hidden>
+            <span class="label">Video length</span>
+            <div class="seg count-seg" id="durationSeg">
+              <button class="seg-btn active" data-duration="auto">Auto</button>
+              <button class="seg-btn" data-duration="4">4s</button>
+              <button class="seg-btn" data-duration="6">6s</button>
+              <button class="seg-btn" data-duration="8">8s</button>
+            </div>
+            <p class="muted small" id="durationHint"></p>
+          </div>
           <div id="creditLine" class="credit-line" role="status" hidden></div>
           <div class="checks" data-video-mode data-flow-only hidden>
             <label class="check"><input id="seqFrames" type="checkbox" /> Sequential frames — pair images as start → end</label>
@@ -239,6 +249,7 @@
         <div class="card-head">
           <h2>Work queue</h2>
           <span id="queueCount" class="badge">0</span>
+          <button id="btnClearQueue" class="btn btn-ghost btn-sm" title="Empty the work queue and start fresh in this same Flow project. Prompts, assets and the memory of what is already uploaded are kept.">Clear queue</button>
         </div>
         <div id="queueList" class="queue"><div class="empty muted">Prompts appear here when you press Start.</div></div>
       </section>

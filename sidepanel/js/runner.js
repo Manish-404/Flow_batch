@@ -4,9 +4,10 @@ import { MODELS, GEMINI_MODELS } from './store.js';
 import { SITES, findSiteTab, callAgent, stageFiles, pinTab, unpinTab, waitTabComplete } from './site.js';
 import { downloadMedia, fetchMediaBlob } from './downloads.js';
 import { track } from './telemetry.js';
+import { persistSession } from './app.js';
 import { cleanGeminiMedia } from './mark-clean.js';
 import { recordFlowInfo, spendOne } from './credits.js';
-import { sleep, log, pad, slug, sanitizeSegment, promptForFlow, blobToDataUrl, isVideoAsset, assetFileName, geminiChatId } from './utils.js';
+import { sleep, log, pad, slug, sanitizeSegment, promptForFlow, videoSeconds, blobToDataUrl, isVideoAsset, assetFileName, geminiChatId } from './utils.js';
 
 /** "@clip_001" → "clip_001.mp4" for files already in the Gemini chat, so the prompt can point at them. */
 const nameChatFiles = (prompt, assets) =>
@@ -34,8 +35,58 @@ export class Runner {
     this.itemDurations = [];
     this.appliedVideoMode = null;
     this.geminiApplied = false; // tool and model chosen in the current Gemini chat
-    this.uploaded = new Set(); // image names already uploaded to the current Flow project
+    this.uploaded = new Set(); // name|bytes of images already uploaded to the current Flow project
   }
+
+  // ---------- memory of what the Flow project already holds ----------
+  // Remembered per Flow project and kept when the queue is cleared. The key includes the file
+  // size, so a new image saved under an old name is uploaded, not mistaken for the old one.
+  upKey(asset) {
+    return `${asset.name.toLowerCase()}|${asset.blob?.size ?? 0}`;
+  }
+
+  saveUploads() {
+    const mem = this.session.flowUploads;
+    if (mem) mem.keys = [...this.uploaded];
+    persistSession();
+  }
+
+  remember(asset) {
+    this.uploaded.add(this.upKey(asset));
+    this.saveUploads();
+  }
+
+  forget(asset) {
+    if (this.uploaded.delete(this.upKey(asset))) this.saveUploads();
+  }
+
+  /** Reload the memory for this project and check which remembered images Flow still shows. */
+  async restoreUploads(url) {
+    const project = /\/project\/([^/?#]+)/i.exec(url || '')?.[1] || '';
+    const mem = this.session.flowUploads;
+    if (!project || mem?.project !== project) {
+      this.session.flowUploads = { project, keys: [] };
+      this.uploaded = new Set();
+      persistSession();
+      return;
+    }
+    this.uploaded = new Set(mem.keys || []);
+    if (!this.uploaded.size) return;
+    const names = [...new Set([...this.uploaded].map((k) => k.split('|')[0]))];
+    try {
+      const { found } = await this.call('findNames', { names }, { timeoutMs: 20000 });
+      const seen = new Set(found.map((n) => n.toLowerCase()));
+      const missing = names.filter((n) => !seen.has(n));
+      log(
+        `Same Flow project: ${names.length - missing.length}/${names.length} earlier uploads are still there` +
+          (missing.length ? ` (not visible on the page: ${missing.join(', ')} — each is re-checked in Flow's file picker when used, and uploaded again only if it's gone)` : ''),
+        missing.length ? 'warn' : 'ok'
+      );
+    } catch (e) {
+      log(`Could not check earlier uploads: ${e.message}`, 'warn');
+    }
+  }
+
 
   get settings() {
     return this.ctx.getSettings();
@@ -97,7 +148,6 @@ export class Runner {
     this.itemDurations = [];
     this.appliedVideoMode = null;
     this.geminiApplied = false;
-    this.uploaded = new Set();
     this.site = this.session.site === 'gemini' ? 'gemini' : 'flow';
     this.ctx.onState();
 
@@ -109,7 +159,8 @@ export class Runner {
       if (this.site === 'gemini') {
         await this.call('waitReady', { timeoutMs: 30000 }, { timeoutMs: 40000 });
       } else {
-        await this.ensureProject(false);
+        const info = await this.ensureProject(false);
+        await this.restoreUploads(info?.url);
         if (this.settings.applyFlowSettings) await this.applyFlowSettings();
       }
 
@@ -204,6 +255,7 @@ export class Runner {
           model: m?.match ? m.label : null,
           modelMatch: m?.match || null,
           count,
+          duration: mode === 'video' ? videoSeconds(this.session) : null,
           hasReferences: queue.some((q) => q.mentions.length),
         },
         { timeoutMs: 60000, retries: 1 }
@@ -228,7 +280,7 @@ export class Runner {
     try {
       const r = await this.call(
         'applySettings',
-        { mode: 'video', videoMode: item.videoMode, aspect: null, model: null, count: null },
+        { mode: 'video', videoMode: item.videoMode, aspect: null, model: null, count: null, duration: videoSeconds(this.session) },
         { timeoutMs: 60000, retries: 1 }
       );
       const status = r.report.join(' · ');
@@ -282,7 +334,7 @@ export class Runner {
    */
   async reuseUpload(asset, { tag, step, slot, inChat }) {
     // An image uploaded earlier in this run is already in the Flow project: pick it by name.
-    const mark = asset.onSite?.[this.site] || (this.site === 'flow' && this.uploaded.has(asset.name.toLowerCase()) ? { file: assetFileName(asset) } : null);
+    const mark = asset.onSite?.[this.site] || (this.site === 'flow' && this.uploaded.has(this.upKey(asset)) ? { file: assetFileName(asset) } : null);
     if (!mark) return false;
     const file = mark.file || assetFileName(asset);
     if (this.site === 'gemini') {
@@ -313,6 +365,7 @@ export class Runner {
         return true;
       }
       log(`${tag} @${asset.name} is marked as in Flow but wasn't found in Flow's file picker — uploading it`, 'warn');
+      this.forget(asset);
     } catch (e) {
       log(`${tag} could not pick @${asset.name} from Flow (${e.message}) — uploading it`, 'warn');
     }
@@ -422,7 +475,7 @@ export class Runner {
           ? this.attachVideo(asset, (p) => step(`Uploading @${asset.name} · ${Math.round(p * 100)}%`))
           : this.call('attachImage', { name: asset.name, dataUrl: await blobToDataUrl(asset.blob), type: asset.type, slot }, { timeoutMs: 120000, retries: 0 });
       const r = await upload();
-      if (!isVideoAsset(asset) && r.method) this.uploaded.add(asset.name.toLowerCase());
+      if (!isVideoAsset(asset) && r.method && r.confirmed) this.remember(asset);
       const where = slot ? ` as ${r.slotFound ? `${slot} frame` : `${slot} frame (slot not found — used upload order)`}` : '';
       log(
         `${tag} attached @${asset.name}${where} via ${r.method}${r.confirmed ? '' : ' (thumbnail not confirmed)'}${r.error ? ` — ${r.error}` : ''}${r.dialogClicks?.length ? ` · clicked ${r.dialogClicks.join(', ')}` : ''}`,
@@ -672,7 +725,8 @@ export class Runner {
       await waitTabComplete(tab.id, 30000);
       await sleep(2500);
     }
-    await this.ensureProject(true);
+    const fresh = await this.ensureProject(true);
+    await this.restoreUploads(fresh?.url);
   }
 
   async newChat() {

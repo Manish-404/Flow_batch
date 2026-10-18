@@ -8,7 +8,7 @@ import { assetIcon } from './assets-ui.js';
 import { splitClipNames, addClipsToAssets } from './split-ui.js';
 import { estimate, recordFlowInfo, PLANS } from './credits.js';
 import { findSiteTab, callAgent } from './site.js';
-import { $, el, splitPrompts, findMentions, isVideoAsset, log, toast } from './utils.js';
+import { $, el, splitPrompts, findMentions, isVideoAsset, videoSeconds, log, toast } from './utils.js';
 
 const ta = () => $('promptInput');
 let aspectSelect;
@@ -189,6 +189,14 @@ export function framePairs(assets, overlap = false) {
   return { pairs, leftover: assets.length % 2 ? assets[assets.length - 1] : null };
 }
 
+/** Used for "One prompt per frame pair" when the prompt box is empty. */
+export const DEFAULT_PAIR_PROMPT =
+  'Anime style, cel-shaded, clean line art, flat colors. Animate one continuous, smooth shot from {start} to {end}. ' +
+  'Keep the same character throughout: identical face, hair, build, outfit, helmet and accessories as in the start frame, ' +
+  'and the same vehicle, background, scene layout, camera framing, angle and lighting. ' +
+  'Match the movement between the two frames naturally, with the pacing of a quick, fluid transition. ' +
+  'No cuts, no morphing, no new people or objects, no change of art style, no text or watermark.';
+
 /**
  * One prompt per scene from a template. `{start}` / `{end}` mark where the mentions go;
  * without them the mentions are prefixed. The unpaired last image gets `{end}` dropped.
@@ -217,7 +225,7 @@ function expandPerPair() {
   const images = app.assets.filter((a) => !isVideoAsset(a));
   if (images.length < 2) return toast('Add at least 2 images (start and end frames)');
   const prompts = splitPrompts(ta().value, app.settings.separator);
-  const template = prompts[0] || '';
+  const template = prompts[0] || DEFAULT_PAIR_PROMPT;
   const overlap = !!app.session.overlapPairs;
   const { pairs, leftover } = framePairs(images, overlap);
   if (leftover && !confirm(
@@ -475,6 +483,16 @@ function setCount(n) {
   renderCredits();
 }
 
+function renderDuration() {
+  const d = app.session.duration || 'auto';
+  document.querySelectorAll('#durationSeg [data-duration]').forEach((b) => b.classList.toggle('active', b.dataset.duration === String(d)));
+  const gap = Number(app.session.frames?.interval) || 0;
+  $('durationHint').textContent =
+    d === 'auto'
+      ? `Auto → ${videoSeconds(app.session)}s (closest Flow length to your ${gap || '?'}s frame interval; Flow offers 4, 6 or 8s)`
+      : `Every clip is generated at ${d}s`;
+}
+
 export function initPrompt() {
   const t = ta();
   t.value = app.session.promptText || '';
@@ -544,6 +562,16 @@ export function initPrompt() {
   });
   document.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
   document.querySelectorAll('#countSeg [data-count]').forEach((b) => b.addEventListener('click', () => setCount(Number(b.dataset.count))));
+  document.querySelectorAll('#durationSeg [data-duration]').forEach((b) =>
+    b.addEventListener('click', () => {
+      app.session.duration = b.dataset.duration;
+      persistSession();
+      renderDuration();
+    })
+  );
+  // The frame interval box belongs to the Frames panel; read its value once that has stored it.
+  ['input', 'change'].forEach((ev) => $('frameInterval')?.addEventListener(ev, () => setTimeout(renderDuration, 0)));
+  renderDuration();
   setMode(app.session.mode || 'image');
   setCount(Number(app.session.count) || 1);
 

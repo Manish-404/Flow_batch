@@ -86,7 +86,7 @@
     '3:4': /3\s*:\s*4/i,
   };
 
-  async function applySettings({ selectors, mode, videoMode, aspect, model, modelMatch, count, hasReferences }) {
+  async function applySettings({ selectors, mode, videoMode, aspect, model, modelMatch, count, duration, hasReferences }) {
     const box = FB.findPromptBox(selectors);
     const report = [];
     const specs = [];
@@ -111,6 +111,10 @@
     }
     if (count) {
       specs.push({ name: 'outputs', labelRe: /outputs? per prompt|number of (outputs|images|videos)|^outputs?$|^count$|variations/i, valueRe: /^x\s?[1-4]$/i, targetRe: new RegExp(`^(x\\s?)?${count}(\\s*(outputs?|images?|videos?))?$`, 'i') });
+    }
+
+    if (duration) {
+      specs.push({ name: 'duration', labelRe: /duration|video length|^length$/i, valueRe: /^\d{1,2}\s?s$/i, targetRe: new RegExp(`^${duration}\s?s(ec(onds?)?)?$`, 'i') });
     }
 
     let settingsOpened = false;
