@@ -178,8 +178,13 @@ function expandPerAsset() {
 
 // ---------- template → one prompt per start → end pair ----------
 /** Disjoint consecutive pairs; an odd final image is left over and runs as Ingredients to video. */
-export function framePairs(assets) {
+export function framePairs(assets, overlap = false) {
   const pairs = [];
+  // Overlapping pairs (1→2, 2→3, …) cover every transition; disjoint ones skip 2→3, 4→5, ….
+  if (overlap) {
+    for (let i = 0; i + 1 < assets.length; i++) pairs.push([assets[i], assets[i + 1]]);
+    return { pairs, leftover: null };
+  }
   for (let i = 0; i + 1 < assets.length; i += 2) pairs.push([assets[i], assets[i + 1]]);
   return { pairs, leftover: assets.length % 2 ? assets[assets.length - 1] : null };
 }
@@ -188,7 +193,7 @@ export function framePairs(assets) {
  * One prompt per scene from a template. `{start}` / `{end}` mark where the mentions go;
  * without them the mentions are prefixed. The unpaired last image gets `{end}` dropped.
  */
-export function buildPairPrompts(names, template) {
+export function buildPairPrompts(names, template, overlap = false) {
   const hasSlots = /\{\{?\s*(start|end)\s*\}?\}/i.test(template);
   const build = (start, end) => {
     const body = hasSlots
@@ -201,7 +206,7 @@ export function buildPairPrompts(names, template) {
       .replace(/[ \t]+\n/g, '\n')
       .trim();
   };
-  const { pairs, leftover } = framePairs(names);
+  const { pairs, leftover } = framePairs(names, overlap);
   const blocks = pairs.map(([a, b]) => build(a, b));
   if (leftover) blocks.push(build(leftover, null));
   return blocks;
@@ -213,7 +218,8 @@ function expandPerPair() {
   if (images.length < 2) return toast('Add at least 2 images (start and end frames)');
   const prompts = splitPrompts(ta().value, app.settings.separator);
   const template = prompts[0] || '';
-  const { pairs, leftover } = framePairs(images);
+  const overlap = !!app.session.overlapPairs;
+  const { pairs, leftover } = framePairs(images, overlap);
   if (leftover && !confirm(
     `${images.length} images is an odd number, so the last one (@${leftover.name}) cannot be paired.\n\n` +
       `FlowBatch will generate ${pairs.length} scene(s) with Frames to video (start → end) and 1 scene ` +
@@ -221,7 +227,7 @@ function expandPerPair() {
   )) return;
   if (prompts.length > 1 && !confirm(`Replace all ${prompts.length} prompts with ${pairs.length + (leftover ? 1 : 0)} scene prompts built from the first one?`)) return;
 
-  const blocks = buildPairPrompts(images.map((a) => a.name), template);
+  const blocks = buildPairPrompts(images.map((a) => a.name), template, overlap);
   const t = ta();
   t.focus();
   t.select();
@@ -513,6 +519,11 @@ export function initPrompt() {
   $('seqFrames').checked = !!app.session.seqFrames;
   $('seqFrames').addEventListener('change', (e) => {
     app.session.seqFrames = e.target.checked;
+    persistSession();
+  });
+  $('overlapPairs').checked = !!app.session.overlapPairs;
+  $('overlapPairs').addEventListener('change', (e) => {
+    app.session.overlapPairs = e.target.checked;
     persistSession();
   });
 

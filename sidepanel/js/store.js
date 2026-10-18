@@ -35,6 +35,7 @@ export const DEFAULT_SESSION = {
   model: 'nano-banana-pro',
   count: 1,
   seqFrames: false,
+  overlapPairs: false,
   gemini: { model: 'keep', aspect: 'keep' },
   queue: [],
   split: { clipSec: 5, start: 0, end: '', prefix: 'clip_', format: 'mp4', quality: 'high', toDownloads: false, v: 2 },

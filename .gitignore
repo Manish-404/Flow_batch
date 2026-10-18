@@ -40,3 +40,11 @@ brag-output/
 
 # Stats endpoint: local Wrangler state
 analytics/.wrangler/
+
+# Local editor settings
+.claude/settings.local.json
+
+# Python tooling
+.venv/
+__pycache__/
+*.pyc

@@ -34,6 +34,7 @@ export class Runner {
     this.itemDurations = [];
     this.appliedVideoMode = null;
     this.geminiApplied = false; // tool and model chosen in the current Gemini chat
+    this.uploaded = new Set(); // image names already uploaded to the current Flow project
   }
 
   get settings() {
@@ -96,6 +97,7 @@ export class Runner {
     this.itemDurations = [];
     this.appliedVideoMode = null;
     this.geminiApplied = false;
+    this.uploaded = new Set();
     this.site = this.session.site === 'gemini' ? 'gemini' : 'flow';
     this.ctx.onState();
 
@@ -279,7 +281,8 @@ export class Runner {
    * Returns true when the asset needs no upload.
    */
   async reuseUpload(asset, { tag, step, slot, inChat }) {
-    const mark = asset.onSite?.[this.site];
+    // An image uploaded earlier in this run is already in the Flow project: pick it by name.
+    const mark = asset.onSite?.[this.site] || (this.site === 'flow' && this.uploaded.has(asset.name.toLowerCase()) ? { file: assetFileName(asset) } : null);
     if (!mark) return false;
     const file = mark.file || assetFileName(asset);
     if (this.site === 'gemini') {
@@ -414,9 +417,12 @@ export class Runner {
       const slot = video ? null : slots[i] || null; // a clip can't be a start or end frame
       if (await this.reuseUpload(asset, { tag, step, slot, inChat })) continue;
       step(`Uploading @${asset.name}${slot ? ` → ${slot} frame` : ''}`);
-      const r = video
-        ? await this.attachVideo(asset, (p) => step(`Uploading @${asset.name} · ${Math.round(p * 100)}%`))
-        : await this.call('attachImage', { name: asset.name, dataUrl: await blobToDataUrl(asset.blob), type: asset.type, slot }, { timeoutMs: 120000, retries: 0 });
+      const upload = async () =>
+        video
+          ? this.attachVideo(asset, (p) => step(`Uploading @${asset.name} · ${Math.round(p * 100)}%`))
+          : this.call('attachImage', { name: asset.name, dataUrl: await blobToDataUrl(asset.blob), type: asset.type, slot }, { timeoutMs: 120000, retries: 0 });
+      const r = await upload();
+      if (!isVideoAsset(asset) && r.method) this.uploaded.add(asset.name.toLowerCase());
       const where = slot ? ` as ${r.slotFound ? `${slot} frame` : `${slot} frame (slot not found — used upload order)`}` : '';
       log(
         `${tag} attached @${asset.name}${where} via ${r.method}${r.confirmed ? '' : ' (thumbnail not confirmed)'}${r.error ? ` — ${r.error}` : ''}${r.dialogClicks?.length ? ` · clicked ${r.dialogClicks.join(', ')}` : ''}`,
@@ -432,7 +438,7 @@ export class Runner {
     if (gemini && ratio && ratio !== 'keep') text += `\n\nAspect ratio: ${ratio}.`;
     const typed = await this.call('setPrompt', { text }, { timeoutMs: 20000 });
     if (!typed.exact) log(`${tag} prompt text may not match exactly (editor reformatted it)`, 'warn');
-    await sleep(400);
+    await sleep(150);
 
     const baseline = await this.call('snapshot', {}, { timeoutMs: 20000 });
     if (this.stopRequested) throw new StopError();

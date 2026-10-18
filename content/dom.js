@@ -8,7 +8,7 @@
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   FB.sleep = sleep;
 
-  FB.waitFor = async (fn, timeoutMs, stepMs = 300) => {
+  FB.waitFor = async (fn, timeoutMs, stepMs = 100) => {
     const t0 = Date.now();
     for (;;) {
       const v = await fn();
@@ -167,14 +167,14 @@
         const dt = new DataTransfer();
         dt.setData('text/plain', text);
         el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
-        await sleep(150);
+        await sleep(80);
         if (norm(getText(el)) !== norm(text)) {
           el.textContent = text;
           el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
         }
       }
     }
-    await sleep(200);
+    await sleep(80);
     return norm(getText(el)) === norm(text);
   }
   FB.setText = setText;

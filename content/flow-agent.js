@@ -42,7 +42,7 @@
       const selected = direct.getAttribute('aria-selected') === 'true' || direct.getAttribute('aria-checked') === 'true' || direct.getAttribute('aria-pressed') === 'true';
       if (!selected) {
         realClick(direct);
-        await sleep(400);
+        await sleep(150);
       }
       return selected ? 'already' : 'set';
     }
@@ -67,14 +67,14 @@
     if (targetRe.test(norm(control.innerText))) return 'already';
 
     realClick(control);
-    const item = await waitFor(() => FB.findOverlayItem(targetRe, { exclude: control }), 2500, 200);
+    const item = await waitFor(() => FB.findOverlayItem(targetRe, { exclude: control }), 2500, 80);
     if (!item) {
       FB.pressKey(document.activeElement || document.body, 'Escape');
-      await sleep(300);
+      await sleep(150);
       return 'option-not-found';
     }
     realClick(item);
-    await sleep(500);
+    await sleep(200);
     return 'set';
   }
 
@@ -121,7 +121,7 @@
         if (btn) {
           realClick(btn);
           settingsOpened = true;
-          await sleep(700);
+          await sleep(350);
           status = await chooseSetting(spec);
         }
       }
@@ -131,7 +131,7 @@
     const priced = { credits: readCredits(), model: readModelLabel(), ...readSummary(box), plan: detectPlan() };
     if (settingsOpened) {
       FB.pressKey(document.activeElement || document.body, 'Escape');
-      await sleep(300);
+      await sleep(150);
     }
     return { report, priced };
   }
@@ -163,7 +163,7 @@
       if (!btn) break;
       realClick(btn);
       removed++;
-      await sleep(450);
+      await sleep(200);
     }
     return { removed };
   }
@@ -178,7 +178,7 @@
       if (!btn) break;
       clicked.push(norm(btn.innerText));
       realClick(btn);
-      await sleep(900);
+      await sleep(350);
     }
     return clicked;
   }
@@ -189,12 +189,12 @@
     if (!target) return null;
     if (target.tagName === 'INPUT') return target;
     realClick(target);
-    let input = await waitFor(() => FB.pickFileInput(composer, true), 1800, 150);
+    let input = await waitFor(() => FB.pickFileInput(composer, true), 1800, 60);
     if (!input) {
       const item = FB.findOverlayItem(/upload|from (your )?(computer|device)|browse|choose file|add (an )?image/i);
       if (item) {
         realClick(item);
-        input = await waitFor(() => FB.pickFileInput(composer, true), 2000, 150);
+        input = await waitFor(() => FB.pickFileInput(composer, true), 2000, 60);
       }
     }
     return input;
@@ -211,7 +211,7 @@
     const add = FB.findAddButton(selectors, box);
     if (!add) return null;
     realClick(add);
-    input = await waitFor(() => FB.pickFileInput(composer, true, kind), 1500, 150);
+    input = await waitFor(() => FB.pickFileInput(composer, true, kind), 2000, 60);
     if (input) return input;
     const item =
       FB.findOverlayItem(/upload|from (your )?(computer|device)|browse|choose file|add (an )?(image|video|media)/i) ||
@@ -220,7 +220,7 @@
         .find(Boolean);
     if (!item) return null;
     realClick(item);
-    return waitFor(() => FB.pickFileInput(composer, true, kind), 2000, 150);
+    return waitFor(() => FB.pickFileInput(composer, true, kind), 2500, 60);
   }
 
   // Named for its first job; it attaches any media file, and a video/* file looks for an
@@ -233,47 +233,56 @@
     const composer = FB.findComposer(box);
     const before = composerThumbCount(composer);
     const root = document.documentElement;
-    root.dataset.flowbatchCapture = '1';
+    const landed = () => composerThumbCount(FB.findComposer(FB.findPromptBox(selectors))) > before;
     let method = null;
     let slotFound = false;
-    try {
-      let input = slot ? await openFrameSlot(slot, selectors, box, composer) : null;
-      slotFound = !!input;
-      if (!input) input = await findUploadInput(selectors, box, composer, kind);
-      if (input) {
-        FB.setInputFiles(input, [file]);
-        method = 'file-input';
-      } else {
-        FB.pasteFiles(box, [file]);
-        method = 'paste';
+    let dialogClicks = [];
+    let confirmed = false;
+
+    // Only one upload is ever started. A slow thumbnail is not a failed upload, so a
+    // second method is tried only when the first could not hand the file over at all.
+    for (const m of ['file-input', 'paste', 'drop']) {
+      root.dataset.flowbatchCapture = '1';
+      let handed = false;
+      try {
+        if (m === 'file-input') {
+          let input = slot ? await openFrameSlot(slot, selectors, box, composer) : null;
+          slotFound = !!input;
+          if (!input) input = await findUploadInput(selectors, box, composer, kind);
+          if (input) {
+            FB.setInputFiles(input, [file]);
+            handed = true;
+          }
+        } else if (m === 'paste') {
+          FB.pasteFiles(box, [file]);
+          handed = true;
+        } else {
+          FB.dropFiles(composer || box, [file]);
+          handed = true;
+        }
+      } finally {
+        delete root.dataset.flowbatchCapture;
       }
-    } finally {
-      delete root.dataset.flowbatchCapture;
+      if (!handed) continue;
+      method = m;
+      if (m === 'file-input') break; // accepted by Flow's own input: wait for it, never repeat
+      await sleep(500);
+      dialogClicks = dialogClicks.concat(await confirmUploadDialogs());
+      if (await waitFor(landed, 6000, 200)) break;
     }
-
-    await sleep(1200);
-    const dialogClicks = await confirmUploadDialogs();
-
-    let confirmed = await waitFor(
-      () => composerThumbCount(FB.findComposer(FB.findPromptBox(selectors))) > before,
-      method === 'paste' ? 5000 : 30000,
-      400
-    );
-    if (!confirmed && method === 'paste') {
-      FB.dropFiles(composer || box, [file]);
-      method = 'drop';
-      await sleep(1000);
-      await confirmUploadDialogs();
-      confirmed = await waitFor(() => composerThumbCount(FB.findComposer(FB.findPromptBox(selectors))) > before, 20000, 400);
+    if (method === 'file-input') {
+      await sleep(500);
+      dialogClicks = dialogClicks.concat(await confirmUploadDialogs());
     }
+    confirmed = !!(await waitFor(landed, 30000, 200));
     // Let upload spinners settle.
     await waitFor(() => {
       const c = FB.findComposer(FB.findPromptBox(selectors));
       return c && !$$('[role="progressbar"], mat-spinner, mat-progress-spinner', c).some(isShown);
-    }, 30000, 500);
+    }, 30000, 250);
     if ($$('[role="menu"], [role="listbox"]').some(isShown)) FB.pressKey(document.body, 'Escape');
     const dialogs = FB.visibleDialogs().map((d) => norm(d.innerText).slice(0, 140));
-    return { method, confirmed: !!confirmed, slotFound, dialogClicks, openDialogs: dialogs };
+    return { method, confirmed, slotFound, dialogClicks, openDialogs: dialogs };
   }
 
   // ---------- files Flow already has ----------
@@ -727,8 +736,13 @@
     setPrompt: async ({ selectors, text }) => {
       const box = FB.findPromptBox(selectors);
       if (!box) throw new Error('Prompt box not found');
-      const exact = await FB.setText(box, text);
-      return { exact, length: FB.getText(box).length };
+      // Editors sometimes swallow or reformat the first insert; retry from a clean box.
+      let exact = false;
+      for (let i = 0; i < 3 && !exact; i++) {
+        if (i) await sleep(150);
+        exact = await FB.setText(FB.findPromptBox(selectors) || box, text);
+      }
+      return { exact, length: FB.getText(FB.findPromptBox(selectors) || box).length };
     },
 
     snapshot,

@@ -77,6 +77,26 @@ function statusIcon(status) {
   return el('span', { class: `st ${status}`, text: status === 'success' ? '✓' : status === 'failed' ? '✕' : status === 'pending' ? '•' : '' });
 }
 
+/** Drop a prompt from the queue and from the prompt box, so Resume doesn't rebuild it. */
+function removeQueueItem(item) {
+  const q = app.session.queue;
+  const i = q.indexOf(item);
+  if (i < 0) return;
+  const sep = (app.settings.separator || '###').trim();
+  const prompts = splitPrompts(app.session.promptText, app.settings.separator);
+  if (prompts.length === q.length && q.every((x, k) => x.prompt === prompts[k])) {
+    prompts.splice(i, 1);
+    app.session.promptText = prompts.join(`
+${sep}
+`);
+    emit('promptChanged');
+  }
+  q.splice(i, 1);
+  persistSession();
+  log(`Removed prompt #${pad(item.n, 2)} from the queue`);
+  scheduleRender();
+}
+
 function queueRow(item) {
   const runner = app.runner;
   const idle = runner.state !== 'running';
@@ -104,6 +124,15 @@ function queueRow(item) {
           await runner.downloadItem(item);
           toast('Download started');
         },
+      })
+    );
+  }
+  if (item.status !== 'running') {
+    actions.append(
+      el('button', {
+        title: 'Remove this prompt from the queue',
+        text: '✕',
+        onclick: () => removeQueueItem(item),
       })
     );
   }
